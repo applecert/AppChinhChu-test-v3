@@ -308,12 +308,20 @@ export default function AccountScreen() {
           setCaptchaState('interactive');
         }, 2500);
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        const cleanEmail = email.trim();
+        await signInWithEmailAndPassword(auth, cleanEmail, password);
       }
-    } catch (error: any) { 
-      Alert.alert(TXT.errorLabel, TXT.langName === 'English' ? 'Incorrect login credentials!' : 'Thông tin sai!'); 
-    } finally { 
-      if (!isRegisterMode) setIsLoading(false); 
+    } catch (error: any) {
+      console.error("[Login Error]:", error?.code, error?.message);
+      let msg = error?.message || 'Đăng nhập không thành công!';
+      if (error?.code === 'auth/invalid-email') msg = 'Email không đúng định dạng!';
+      if (error?.code === 'auth/user-not-found') msg = 'Tài khoản này chưa tồn tại. Vui lòng đăng ký!';
+      if (error?.code === 'auth/wrong-password' || error?.code === 'auth/invalid-credential') msg = 'Sai mật khẩu hoặc thông tin đăng nhập!';
+      if (error?.code === 'auth/too-many-requests') msg = 'Tài khoản bị tạm khóa do thử sai nhiều lần. Vui lòng thử lại sau 1 phút!';
+      if (error?.code === 'auth/network-request-failed') msg = 'Không có kết nối mạng!';
+      Alert.alert(TXT.errorLabel, msg);
+    } finally {
+      if (!isRegisterMode) setIsLoading(false);
     }
   };
 
