@@ -1183,7 +1183,7 @@ export default function AiSupportScreen() {
 
   const suggestions = [
     { label: 'Hướng dẫn người mới', query: 'huong dan nguoi moi nap cert', icon: <HelpCircle size={15} color="#00E5FF" /> },
-    { label: 'Tìm IPA YouTube', query: 'ipa youtube', icon: <Sparkles size={15} color="#A78BFA" /> },
+    { label: 'Tìm ứng dụng IPA', query: 'tim ung dung ipa', icon: <Sparkles size={15} color="#A78BFA" /> },
     { label: 'Thẻ nạp xu ACB', query: 'nap xu bank acb', icon: <Wallet size={15} color="#34D399" /> },
     { label: 'Bảng giá VIP', query: 'gia han vip', icon: <Crown size={15} color="#FBBF24" /> },
     { label: 'Lỗi app văng', query: 'loi chung chi app crash', icon: <AlertTriangle size={15} color="#FB7185" /> },
