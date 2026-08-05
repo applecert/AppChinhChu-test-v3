@@ -35,12 +35,13 @@ import {
   ShieldCheck,
   AlertTriangle,
   Download,
-  ExternalLink,
   Flame,
   Zap,
+  Star,
+  ChevronRight,
 } from 'lucide-react-native';
 import { auth, db } from '../firebaseConfig';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { COLORS, useThemeUpdate, TXT } from '../constants/theme';
 import { fetchRegularApps, fetchVIPApps, AppItem } from '../constants/data';
@@ -50,12 +51,12 @@ const BANK_ID = 'ACB';
 const ACCOUNT_NO = '22703611';
 const ACCOUNT_NAME = 'TRAN NGUYEN MINH QUI';
 
-interface ActionItem {
+interface CommandAction {
   label: string;
   route?: string;
   actionType?: string;
   payload?: any;
-  styleType?: 'primary' | 'yellow' | 'danger';
+  style: 'primary' | 'yellow' | 'danger';
 }
 
 interface Message {
@@ -63,13 +64,10 @@ interface Message {
   sender: 'user' | 'bot';
   text: string;
   timestamp: string;
-  actions?: ActionItem[];
+  actions?: CommandAction[];
   appCards?: AppItem[];
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   UTILITIES
-   ═══════════════════════════════════════════════════════════════ */
 function removeAccents(str: string) {
   return str
     .normalize('NFD')
@@ -83,9 +81,13 @@ function removeAccents(str: string) {
    SUB-COMPONENTS
    ═══════════════════════════════════════════════════════════════ */
 
-// ── Animated Typing Indicator (3 bouncing dots) ──
+// Animated Typing Indicator
 const TypingIndicator = memo(({ isLight }: { isLight: boolean }) => {
-  const dots = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
+  const dots = [
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+  ];
 
   useEffect(() => {
     const animations = dots.map((dot, i) =>
@@ -136,7 +138,7 @@ const TypingIndicator = memo(({ isLight }: { isLight: boolean }) => {
   );
 });
 
-// ── Markdown-like Text Renderer ──
+// Markdown-like Text Renderer
 const MarkdownText = memo(({ text, color, isLight }: { text: string; color: string; isLight: boolean }) => {
   const parts = text.split(/(\*\*.*?\*\*)/g);
 
@@ -174,22 +176,20 @@ const MarkdownText = memo(({ text, color, isLight }: { text: string; color: stri
   );
 });
 
-// ── Animated Message Bubble ──
+// Message Bubble Component
 const MessageBubble = memo(({ msg, isLight, styles, onActionPress, onAppPress }: any) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: 350, easing: Easing.out(Easing.back(1.2)), useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 350, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
   }, []);
 
   const isUser = msg.sender === 'user';
-  const textColor = isUser ? (isLight ? '#FFFFFF' : '#03040A') : (isLight ? '#1a1a2e' : '#E2E8F0');
+  const textColor = isUser ? (isLight ? '#FFFFFF' : '#03040A') : (isLight ? '#1A1A2E' : '#E2E8F0');
   const timeColor = isUser
     ? (isLight ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)')
     : (isLight ? '#94A3B8' : '#64748B');
@@ -199,7 +199,7 @@ const MessageBubble = memo(({ msg, isLight, styles, onActionPress, onAppPress }:
       style={[
         styles.msgRow,
         { justifyContent: isUser ? 'flex-end' : 'flex-start' },
-        { opacity: fadeAnim, transform: [{ translateY: slideAnim }, { scale: scaleAnim }] },
+        { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
       ]}
     >
       {!isUser && (
@@ -211,7 +211,7 @@ const MessageBubble = memo(({ msg, isLight, styles, onActionPress, onAppPress }:
       <View style={[styles.msgBubble, isUser ? styles.userBubble : styles.botBubble]}>
         <MarkdownText text={msg.text} color={textColor} isLight={isLight} />
 
-        {/* App Cards */}
+        {/* App Cards inside AI response */}
         {msg.appCards && msg.appCards.length > 0 && (
           <View style={{ marginTop: 12, gap: 10 }}>
             {msg.appCards.map((appItem: AppItem) => (
@@ -219,7 +219,7 @@ const MessageBubble = memo(({ msg, isLight, styles, onActionPress, onAppPress }:
                 key={appItem.id}
                 style={styles.aiAppCard}
                 onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                   onAppPress(appItem.id);
                 }}
                 activeOpacity={0.85}
@@ -247,22 +247,22 @@ const MessageBubble = memo(({ msg, isLight, styles, onActionPress, onAppPress }:
           </View>
         )}
 
-        {/* Action Chips */}
+        {/* Command Action Chips */}
         {msg.actions && msg.actions.length > 0 && (
           <View style={styles.actionChipRow}>
-            {msg.actions.map((act: ActionItem, i: number) => (
+            {msg.actions.map((act: CommandAction, i: number) => (
               <TouchableOpacity
                 key={i}
                 style={[
                   styles.actionChip,
-                  act.styleType === 'primary' && styles.actionChipPrimary,
-                  act.styleType === 'yellow' && styles.actionChipYellow,
-                  act.styleType === 'danger' && styles.actionChipDanger,
+                  act.style === 'primary' && styles.actionChipPrimary,
+                  act.style === 'yellow' && styles.actionChipYellow,
+                  act.style === 'danger' && styles.actionChipDanger,
                 ]}
                 onPress={() => onActionPress(act)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.actionChipText, { color: act.styleType === 'primary' ? (isLight ? '#FFFFFF' : '#03040A') : '#FFFFFF' }]}>
+                <Text style={[styles.actionChipText, { color: act.style === 'primary' ? (isLight ? '#FFFFFF' : '#03040A') : '#FFFFFF' }]}>
                   {act.label}
                 </Text>
               </TouchableOpacity>
@@ -276,15 +276,15 @@ const MessageBubble = memo(({ msg, isLight, styles, onActionPress, onAppPress }:
   );
 });
 
-// ── Suggestion Pill with Stagger ──
+// Suggestion Pill Component
 const SuggestionPill = memo(({ item, index, onPress, styles }: any) => {
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(anim, {
       toValue: 1,
-      duration: 500,
-      delay: index * 80,
+      duration: 450,
+      delay: index * 60,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
@@ -294,13 +294,13 @@ const SuggestionPill = memo(({ item, index, onPress, styles }: any) => {
     <Animated.View
       style={{
         opacity: anim,
-        transform: [{ scale: Animated.add(0.8, Animated.multiply(anim, 0.2)) }, { translateY: Animated.multiply(Animated.subtract(1, anim), 20) }],
+        transform: [{ scale: Animated.add(0.85, Animated.multiply(anim, 0.15)) }],
       }}
     >
       <TouchableOpacity
         style={styles.suggestionPill}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           onPress(item.query);
         }}
         activeOpacity={0.8}
@@ -334,9 +334,8 @@ export default function AiSupportScreen() {
   const avatarPulse = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
-  const inputGlow = useRef(new Animated.Value(0)).current;
 
-  // Pulse + Glow animation for AI Avatar
+  // Pulse & Glow Animation
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
@@ -358,16 +357,7 @@ export default function AiSupportScreen() {
     };
   }, []);
 
-  // Input focus glow
-  useEffect(() => {
-    Animated.timing(inputGlow, {
-      toValue: isInputFocused ? 1 : 0,
-      duration: 250,
-      useNativeDriver: false,
-    }).start();
-  }, [isInputFocused]);
-
-  // Fetch apps data
+  // Fetch App Data
   useEffect(() => {
     Promise.all([fetchRegularApps(), fetchVIPApps()]).then(([reg, vip]) => {
       setAppsData([...reg, ...vip]);
@@ -420,11 +410,11 @@ export default function AiSupportScreen() {
   }, []);
 
   const resetChat = useCallback(() => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     setMessages([]);
   }, []);
 
-  // Process Bot Response Logic
+  // AI Intent Process Engine
   const processQuery = useCallback(
     async (rawText: string) => {
       const text = removeAccents(rawText.trim());
@@ -442,7 +432,7 @@ export default function AiSupportScreen() {
       setIsThinking(true);
       scrollToBottom();
 
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 700));
 
       let botText = '';
       let actions: Message['actions'] = [];
@@ -451,27 +441,27 @@ export default function AiSupportScreen() {
       if (text.includes('vip') || text.includes('gia han') || text.includes('mua goi') || text.includes('nang cap')) {
         botText = `👑 **Đặc Quyền VIP IPAVIET OS**\n\nKhi nâng cấp gói VIP, sếp sẽ nhận được các đặc quyền cao cấp:\n• Tải & cài đặt ứng dụng VIP tốc độ cao không giới hạn.\n• Ký App ngoại tuyến không bị dính thu hồi chứng chỉ.\n• Hỗ trợ ưu tiên 24/7 từ đội ngũ kỹ thuật.\n\nSếp chọn gói phù hợp bên dưới nhé!`;
         actions = [
-          { label: '👑 NÂNG CẤP VIP NGAY', route: '/buy-vip', styleType: 'primary' },
-          { label: '💳 NẠP TIỀN VÀO TÀI KHOẢN', route: '/account', styleType: 'yellow' },
+          { label: '👑 NÂNG CẤP VIP NGAY', route: '/buy-vip', style: 'primary' },
+          { label: '💳 NẠP TIỀN VÀO TÀI KHOẢN', route: '/account', style: 'yellow' },
         ];
       } else if (text.includes('ky app') || text.includes('vsign') || text.includes('cert') || text.includes('p12') || text.includes('provision') || text.includes('dylib') || text.includes('zip')) {
         botText = `🛠️ **Hướng Dẫn Ký IPA Ngoại Tuyến (VSign Pro)**\n\n1. **Chuẩn bị**: Nạp file chứng chỉ dạng tệp ZIP (chứa file P12 và MobileProvision) vào ứng dụng.\n2. **Chọn App**: Chọn tệp IPA sếp muốn ký từ bộ nhớ máy.\n3. **Chèn Dylib/Deb**: Sếp có thể bấm chèn thêm các tệp Hack/Tweak Dylib tùy chỉnh.\n4. **Bấm Ký App**: Quá trình ký diễn ra 100% ngoại tuyến trên thiết bị di động của sếp.`;
         actions = [
-          { label: '🛠️ MỞ MÀN HÌNH KÝ APP', route: '/sign', styleType: 'primary' },
-          { label: '📂 NẠP CHỨNG CHỈ ZIP', route: '/sign?importCert=true', styleType: 'yellow' },
+          { label: '🛠️ MỞ MÀN HÌNH KÝ APP', route: '/sign', style: 'primary' },
+          { label: '📂 NẠP CHỨNG CHỈ ZIP', route: '/sign?importCert=true', style: 'yellow' },
         ];
       } else if (text.includes('nap') || text.includes('tien') || text.includes('xu') || text.includes('ngan hang') || text.includes('bank') || text.includes('chuyen khoan')) {
         const userEmail = auth.currentUser?.email || 'TaiKhoanCuaSep';
         botText = `💳 **Hướng Dẫn Nạp Xu Tự Động (ACB Bank)**\n\nSếp vui lòng chuyển khoản theo thông tin bên dưới, hệ thống sẽ cộng xu tự động sau 10 - 30 giây:\n\n• **Ngân hàng**: ACB (Á Châu)\n• **Số tài khoản**: \`${ACCOUNT_NO}\`\n• **Chủ tài khoản**: ${ACCOUNT_NAME}\n• **Nội dung chuyển khoản**: \`NAP ${userEmail}\`\n\n*(Lưu ý điền đúng cú pháp Email để xu tự động nạp nhé sếp!)*`;
         actions = [
-          { label: '💳 ĐẾN TRANG NẠP TIỀN', route: '/account', styleType: 'primary' },
-          { label: '💬 LIÊN HỆ ADMIN HỖ TRỢ', route: '/account', styleType: 'yellow' },
+          { label: '💳 ĐẾN TRANG NẠP TIỀN', route: '/account', style: 'primary' },
+          { label: '💬 LIÊN HỆ ADMIN HỖ TRỢ', route: '/account', style: 'yellow' },
         ];
       } else if (text.includes('crash') || text.includes('loi') || text.includes('thu hoi') || text.includes('văng') || text.includes('vang') || text.includes('khong mo duoc')) {
         botText = `⚠️ **Khắc Phục Lỗi App Bị Crash / Thu Hồi Chứng Chỉ**\n\n• **Nguyên nhân**: Apple đã thu hồi chứng chỉ doanh nghiệp dùng chung.\n• **Cách xử lý**: \n  1. Sếp gỡ bản app bị văng ra khỏi máy.\n  2. Vào mục **Ký App** trên ứng dụng để ký lại bằng chứng chỉ cá nhân của sếp.\n  3. Hoặc nâng cấp **VIP IPAVIET** để dùng chứng chỉ riêng độc quyền chống thu hồi!`;
         actions = [
-          { label: '👑 MUA CHỨNG CHỈ VIP', route: '/buy-vip', styleType: 'primary' },
-          { label: '🛠️ TỰ KÝ LẠI APP', route: '/sign', styleType: 'yellow' },
+          { label: '👑 MUA CHỨNG CHỈ VIP', route: '/buy-vip', style: 'primary' },
+          { label: '🛠️ TỰ KÝ LẠI APP', route: '/sign', style: 'yellow' },
         ];
       } else if (text.includes('ipa') || text.includes('game') || text.includes('hack') || text.includes('cheat') || text.includes('tim') || text.includes('app') || text.includes('youtube') || text.includes('facebook') || text.includes('tiktok')) {
         const queryClean = text.replace(/(tim|app|ipa|hack|cheat|can|muon|cho|xem)/g, '').trim();
@@ -487,26 +477,26 @@ export default function AiSupportScreen() {
           botText = `📱 **Kho IPA Cao Cấp IPAVIET OS**\n\nHệ thống sở hữu hàng trăm ứng dụng iOS đã Mod/Cheat/Tweak sẵn. Sếp có thể tìm kiếm tên app tại Kho IPA hoặc yêu cầu Admin hỗ trợ nạp app mới!`;
         }
         actions = [
-          { label: '📦 MỞ KHO IPA', route: '/apps', styleType: 'primary' },
-          { label: '👑 MỞ KHO APP VIP', route: '/vip', styleType: 'yellow' },
+          { label: '📦 MỞ KHO IPA', route: '/apps', style: 'primary' },
+          { label: '👑 MỞ KHO APP VIP', route: '/vip', style: 'yellow' },
         ];
       } else if (text.includes('mmo') || text.includes('spotify') || text.includes('netflix') || text.includes('chatgpt') || text.includes('tai khoan') || text.includes('cho mmo')) {
         botText = `🛒 **Tạp Hóa MMO — Tài Khoản Bán Tự Động**\n\nSếp có thể mua các gói tài khoản Premium chính chủ với giá siêu rẻ:\n• Spotify Premium 1 Năm (Chính chủ)\n• Netflix Premium 4K\n• ChatGPT Plus / Claude Pro\n• Key Windows & Office Bản Quyền`;
         actions = [
-          { label: '🛒 MỞ CHỢ MMO', route: '/mmo', styleType: 'primary' },
+          { label: '🛒 MỞ CHỢ MMO', route: '/mmo', style: 'primary' },
         ];
       } else if (text.includes('admin') || text.includes('lien he') || text.includes('zalo') || text.includes('telegram') || text.includes('ho tro')) {
         botText = `💬 **Kênh Hỗ Trợ Kỹ Thuật IPAVIET OS**\n\nNếu sếp cần hỗ trợ trực tiếp từ Admin:\n• **Zalo / Hotline**: 0987.xxx.xxx\n• **Telegram**: @ipaviet_support\n• **Thời gian làm việc**: 08:00 - 23:00 hàng ngày`;
         actions = [
-          { label: '💬 LIÊN HỆ ZALO ADMIN', actionType: 'zalo', styleType: 'primary' },
+          { label: '💬 LIÊN HỆ ZALO ADMIN', actionType: 'zalo', style: 'primary' },
         ];
       } else {
         botText = `🤖 **Dạ em là Trợ Lý IPAVIET AI đây ạ!**\n\nEm có thể hỗ trợ sếp tất cả các công việc trên hệ thống:\n• Hướng dẫn ký tệp IPA & nạp chứng chỉ P12 / MobileProvision.\n• Kiểm tra số dư xu, hướng dẫn nạp tiền tự động qua ACB Bank.\n• Tư vấn các gói VIP & xử lý lỗi app văng / thu hồi.\n• Tìm kiếm ứng dụng Mod / Tweak IPA trong kho.\n\nSếp chọn tác vụ nhanh bên dưới hoặc gõ câu hỏi để em trợ giúp nhé!`;
         actions = [
-          { label: '👑 GIA HẠN VIP', route: '/buy-vip', styleType: 'primary' },
-          { label: '🛠️ KÝ APP IPA', route: '/sign', styleType: 'yellow' },
-          { label: '💳 NẠP TIỀN', route: '/account', styleType: 'primary' },
-          { label: '📦 KHO IPA', route: '/apps', styleType: 'yellow' },
+          { label: '👑 GIA HẠN VIP', route: '/buy-vip', style: 'primary' },
+          { label: '🛠️ KÝ APP IPA', route: '/sign', style: 'yellow' },
+          { label: '💳 NẠP TIỀN', route: '/account', style: 'primary' },
+          { label: '📦 KHO IPA', route: '/apps', style: 'yellow' },
         ];
       }
 
@@ -527,8 +517,8 @@ export default function AiSupportScreen() {
   );
 
   const handleActionPress = useCallback(
-    (act: ActionItem) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
+    (act: CommandAction) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       if (act.route) {
         router.push(act.route as any);
       } else if (act.actionType === 'zalo') {
@@ -538,9 +528,12 @@ export default function AiSupportScreen() {
     [router]
   );
 
-  const handleAppPress = useCallback((id: string) => {
-    router.push(`/details/${id}` as any);
-  }, [router]);
+  const handleAppPress = useCallback(
+    (id: string) => {
+      router.push(`/details/${id}` as any);
+    },
+    [router]
+  );
 
   const suggestions = [
     { label: 'Gia hạn VIP', query: 'gia han vip', icon: <Crown size={16} color="#F59E0B" /> },
@@ -597,7 +590,7 @@ export default function AiSupportScreen() {
             <TouchableOpacity
               style={styles.backBtn}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 router.back();
               }}
               activeOpacity={0.8}
@@ -629,11 +622,7 @@ export default function AiSupportScreen() {
               </View>
             </View>
 
-            <TouchableOpacity
-              style={styles.resetBtn}
-              onPress={resetChat}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={styles.resetBtn} onPress={resetChat} activeOpacity={0.8}>
               <RotateCcw size={16} color={COLORS.textMuted} />
             </TouchableOpacity>
           </View>
@@ -764,21 +753,7 @@ export default function AiSupportScreen() {
         </Animated.ScrollView>
 
         {/* Input Bar */}
-        <Animated.View
-          style={[
-            styles.inputBarArea,
-            {
-              borderColor: inputGlow.interpolate({
-                inputRange: [0, 1],
-                outputRange: [isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)', isLight ? 'rgba(0,82,255,0.3)' : 'rgba(0,240,255,0.4)'],
-              }),
-              shadowColor: isLight ? '#0052FF' : '#00F0FF',
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: inputGlow.interpolate({ inputRange: [0, 1], outputRange: [0, 0.15] }),
-              shadowRadius: 12,
-            },
-          ]}
-        >
+        <View style={styles.inputBarArea}>
           <View style={[styles.inputPill, isInputFocused && { borderColor: isLight ? 'rgba(0,82,255,0.4)' : 'rgba(0,240,255,0.5)' }]}>
             <TextInput
               style={styles.textInput}
@@ -807,7 +782,7 @@ export default function AiSupportScreen() {
               ]}
               disabled={!inputText.trim()}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
                 inputText.trim() && processQuery(inputText);
               }}
               activeOpacity={0.8}
@@ -815,7 +790,7 @@ export default function AiSupportScreen() {
               <Send size={16} color={inputText.trim() ? (isLight ? '#FFFFFF' : '#03040A') : COLORS.textMuted} strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
