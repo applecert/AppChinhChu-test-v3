@@ -334,6 +334,7 @@ export default function AccountScreen() {
         const { signInWithPopup } = require('firebase/auth');
         const provider = new GoogleAuthProvider();
         await signInWithPopup(auth, provider);
+        Alert.alert("Thành Công", "Đăng nhập Google thành công!");
       } else {
         const redirectUrl = Linking.createURL('/account');
         const authUrl = `https://ipaviet.site/login-app.html?redirect_uri=${encodeURIComponent(redirectUrl)}`;
@@ -341,16 +342,19 @@ export default function AccountScreen() {
 
         if (result.type === 'success' && result.url) {
           const parsed = Linking.parse(result.url);
-          const token = parsed.queryParams?.idToken as string;
+          const token = (parsed.queryParams?.idToken || parsed.queryParams?.token) as string;
           if (token) {
             try {
               const credential = GoogleAuthProvider.credential(token);
               await signInWithCredential(auth, credential);
+              Alert.alert("Thành Công", "Đăng nhập Google thành công!");
             } catch (credError: any) {
-              if (credError?.code === 'auth/invalid-credential' || credError?.message?.includes('not issued by Google')) {
+              try {
                 await signInWithCustomToken(auth, token);
-              } else {
-                throw credError;
+                Alert.alert("Thành Công", "Đăng nhập Google thành công!");
+              } catch (customErr) {
+                console.error("Token auth failed:", customErr);
+                Alert.alert("Lỗi", "Không thể xác thực token Google.");
               }
             }
           }
