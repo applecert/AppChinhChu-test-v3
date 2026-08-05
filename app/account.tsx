@@ -311,18 +311,7 @@ export default function AccountScreen() {
         console.log("[Login] Signing in with email:", cleanEmail);
         await signInWithEmailAndPassword(auth, cleanEmail, password);
         console.log("[Login] Firebase auth success!");
-        Alert.alert("Thành Công", "Đăng nhập thành công!", [
-          {
-            text: "OK",
-            onPress: () => {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace('/(tabs)');
-              }
-            }
-          }
-        ]);
+        Alert.alert("Thành Công", "Đăng nhập thành công!");
       }
     } catch (error: any) {
       console.error("[Login Error]:", error?.code, error?.message);
