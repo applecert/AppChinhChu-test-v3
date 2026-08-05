@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchRegularApps, fetchVIPApps, AppItem } from '../../constants/data';
 import { COLORS, SIZES, SHADOWS, useThemeUpdate, TXT } from '../../constants/theme';
 import { SPRINGS, entranceAnim, shimmerLoop } from '../../constants/animations';
-import { Sparkles, Flame, BellRing, X, ChevronRight } from 'lucide-react-native';
+import { Sparkles, Flame, BellRing, X, ChevronRight, Bot } from 'lucide-react-native';
 import { IconSymbol } from '../../components/ui/icon-symbol';
 import { TabTransition } from '../../components/ui/TabTransition';
 import * as Linking from 'expo-linking';
@@ -409,6 +409,17 @@ export default function HomeScreen() {
             <Text style={[styles.largeTitle, { color: COLORS.text }]}>Khám Phá</Text>
             
             <View style={styles.headerRightActions}>
+              {/* AI Support Button */}
+              <TouchableOpacity 
+                style={{ zIndex: 10 }}
+                onPress={() => router.push('/ai-support')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.circleActionBtn, { backgroundColor: isLight ? 'rgba(0,82,255,0.1)' : 'rgba(0,240,255,0.12)', borderWidth: 1, borderColor: isLight ? 'rgba(0,82,255,0.2)' : 'rgba(0,240,255,0.25)' }]}>
+                  <Bot size={18} color={isLight ? '#0052FF' : '#00F0FF'} />
+                </View>
+              </TouchableOpacity>
+
               {/* Search button with press scale */}
               <TouchableOpacity 
                 style={{ zIndex: 10 }}

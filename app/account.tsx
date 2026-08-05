@@ -16,7 +16,7 @@ import {
   Fingerprint, User, Mail, Lock, BellRing, Star, Gem, ChevronRight, 
   CloudDownload, Clock, ShieldCheck, Languages, Palette, X, Database, 
   HelpCircle, MessageSquare, FileText, Shield, Instagram, Facebook, 
-  Share2, RefreshCw, Film
+  Share2, RefreshCw, Film, Bot
 } from 'lucide-react-native';
 
 import { auth, db } from '../firebaseConfig';
@@ -852,6 +852,10 @@ export default function AccountScreen() {
         {/* SETTINGS ACTIONS GROUP */}
         <View style={[styles.groupCard, SHADOWS.glowCard]}>
           <View style={styles.groupInside}>
+            {renderRow(Bot, 'Trợ Lý IPAVIET AI 24/7', 'Tư vấn & Ký App', isLight ? '#0052FF' : '#00F0FF', false, false, () => {
+              navigateFromModal('/ai-support');
+            })}
+            <View style={styles.divider} />
             {renderRow(RefreshCw, 'Restore purchases', undefined, '#8E8E93', false, false, () => {
               Alert.alert('Khôi phục giao dịch', 'Giao dịch mua của sếp đã được đồng bộ tự động với hệ thống iCloud.');
             })}
