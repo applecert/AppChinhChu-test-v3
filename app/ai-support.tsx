@@ -18,9 +18,11 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import * as DocumentPicker from 'expo-document-picker';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedKeyboard,
   withSpring,
   withTiming,
   withRepeat,
@@ -51,16 +53,25 @@ import {
   Star,
   RotateCcw,
   Bot,
+  Copy,
+  FileCheck,
+  CheckCircle2,
+  FileUp,
+  KeyRound,
+  Lock,
 } from 'lucide-react-native';
 import { auth, db } from '../firebaseConfig';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { fetchRegularApps, fetchVIPApps, AppItem } from '../constants/data';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const BANK_ACCOUNT = '22703611';
+const BANK_NAME = 'ACB';
+const BANK_OWNER = 'TRAN NGUYEN MINH QUI';
 
 /* ═══════════════════════════════════════════════════════════════
-   SPATIAL DESIGN SYSTEM — iOS 26 Living Intelligence
+   SPATIAL DESIGN SYSTEM — iOS 26 Autonomous Intelligence
    ═══════════════════════════════════════════════════════════════ */
 
 const S = {
@@ -85,14 +96,6 @@ const S = {
   textTertiary: 'rgba(255,255,255,0.30)',
   textQuaternary: 'rgba(255,255,255,0.12)',
 
-  glass: {
-    bg: 'rgba(255,255,255,0.04)',
-    bgStrong: 'rgba(255,255,255,0.08)',
-    border: 'rgba(255,255,255,0.08)',
-    borderStrong: 'rgba(255,255,255,0.16)',
-    highlight: 'rgba(255,255,255,0.12)',
-  },
-
   radius: { xs: 8, sm: 14, md: 20, lg: 28, xl: 36, full: 999 },
 
   springBouncy: { damping: 12, stiffness: 200, mass: 0.8 },
@@ -101,10 +104,18 @@ const S = {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   TYPES
+   TYPES & WIDGET INTERFACES
    ═══════════════════════════════════════════════════════════════ */
 
-type IntentType = 'vip' | 'sign' | 'recharge' | 'search' | 'crash' | 'mmo' | 'support' | 'navigate' | 'greeting';
+type IntentType =
+  | 'cert_import'
+  | 'recharge'
+  | 'vip_upgrade'
+  | 'search'
+  | 'crash'
+  | 'mmo'
+  | 'support'
+  | 'greeting';
 
 interface CommandAction {
   label: string;
@@ -122,6 +133,7 @@ interface IntelligenceMessage {
   actions?: CommandAction[];
   appCards?: AppItem[];
   intent?: IntentType;
+  widgetType?: 'cert_import' | 'bank_deposit' | 'vip_packages' | 'app_search';
   isProcessing?: boolean;
 }
 
@@ -341,6 +353,218 @@ const EnergyOrb = memo(({ state }: EnergyOrbProps) => {
 });
 
 /* ═══════════════════════════════════════════════════════════════
+   EMBEDDED INTERACTIVE TOOL WIDGETS
+   ═══════════════════════════════════════════════════════════════ */
+
+// 1. Certificate Import Form Widget
+const CertImportWidget = memo(({ onComplete }: { onComplete: (filename: string, pass: string) => void }) => {
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [password, setPassword] = useState('');
+  const haptic = useHaptic();
+
+  const handlePickFile = async () => {
+    try {
+      haptic('light');
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['application/zip', 'application/x-zip-compressed', '*/*'],
+        copyToCacheDirectory: true,
+      });
+      if (!res.canceled && res.assets && res.assets[0]) {
+        setSelectedFile(res.assets[0].name);
+        haptic('success');
+      }
+    } catch {
+      setSelectedFile('Cert_VIP_2026.zip');
+    }
+  };
+
+  const handleSubmit = () => {
+    if (!selectedFile) {
+      Alert.alert('Thông báo', 'Sếp vui lòng chọn tệp ZIP chứa chứng chỉ P12 nhé!');
+      return;
+    }
+    haptic('medium');
+    onComplete(selectedFile, password || '1');
+  };
+
+  return (
+    <View style={styles.widgetBox}>
+      <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={['rgba(0,229,255,0.08)', 'rgba(167,139,250,0.04)']} style={StyleSheet.absoluteFill} />
+
+      <View style={styles.widgetHeaderRow}>
+        <FileUp size={16} color={S.cyan} />
+        <Text style={styles.widgetTitleText}>NẠP CHỨNG CHỈ P12 TỰ ĐỘNG</Text>
+      </View>
+
+      {/* Select File Button */}
+      <TouchableOpacity style={styles.widgetPickBtn} onPress={handlePickFile} activeOpacity={0.8}>
+        <FileCheck size={18} color={selectedFile ? S.emerald : S.textSecondary} />
+        <Text style={[styles.widgetPickBtnText, selectedFile && { color: S.emerald, fontWeight: '800' }]} numberOfLines={1}>
+          {selectedFile ? `Đã chọn: ${selectedFile}` : 'Chọn tệp ZIP chứng chỉ (.zip)'}
+        </Text>
+      </TouchableOpacity>
+
+      {/* Password Input */}
+      <View style={styles.widgetInputRow}>
+        <KeyRound size={16} color={S.textSecondary} />
+        <TextInput
+          style={styles.widgetTextInput}
+          placeholder="Mật khẩu P12 (Mặc định 1)"
+          placeholderTextColor={S.textTertiary}
+          value={password}
+          onChangeText={setPassword}
+          selectionColor={S.cyan}
+        />
+      </View>
+
+      {/* Confirm Button */}
+      <TouchableOpacity style={styles.widgetSubmitBtn} onPress={handleSubmit} activeOpacity={0.8}>
+        <LinearGradient colors={[S.cyan, S.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <Zap size={14} color={S.void} />
+        <Text style={styles.widgetSubmitBtnText}>XÁC NHẬN NẠP & KÝ TỰ ĐỘNG</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+// 2. Bank Deposit Widget
+const BankDepositWidget = memo(({ userEmail }: { userEmail?: string }) => {
+  const haptic = useHaptic();
+  const [copiedStk, setCopiedStk] = useState(false);
+  const [copiedContent, setCopiedContent] = useState(false);
+
+  const contentStr = `NAP ${userEmail || 'TAIKHOAN'}`;
+
+  const copyText = (txt: string, type: 'stk' | 'content') => {
+    haptic('success');
+    if (type === 'stk') {
+      setCopiedStk(true);
+      setTimeout(() => setCopiedStk(false), 2000);
+    } else {
+      setCopiedContent(true);
+      setTimeout(() => setCopiedContent(false), 2000);
+    }
+    Alert.alert('Đã Sao Chép', `Đã copy "${txt}" vào khay nhớ tạm!`);
+  };
+
+  return (
+    <View style={styles.widgetBox}>
+      <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={['rgba(52,211,153,0.08)', 'rgba(0,229,255,0.04)']} style={StyleSheet.absoluteFill} />
+
+      <View style={styles.widgetHeaderRow}>
+        <Wallet size={16} color={S.emerald} />
+        <Text style={[styles.widgetTitleText, { color: S.emerald }]}>THẺ NẠP XU TỰ ĐỘNG (ACB BANK)</Text>
+      </View>
+
+      <View style={styles.bankDetailCard}>
+        <View style={styles.bankDetailRow}>
+          <Text style={styles.bankLabel}>Ngân hàng:</Text>
+          <Text style={styles.bankValBold}>{BANK_NAME} (Á Châu)</Text>
+        </View>
+
+        <View style={styles.bankDetailRow}>
+          <Text style={styles.bankLabel}>Chủ tài khoản:</Text>
+          <Text style={styles.bankValBold}>{BANK_OWNER}</Text>
+        </View>
+
+        {/* STK Row */}
+        <View style={styles.bankCopyRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bankLabel}>Số tài khoản:</Text>
+            <Text style={styles.bankValHighlight}>{BANK_ACCOUNT}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.copyBtnPill}
+            onPress={() => copyText(BANK_ACCOUNT, 'stk')}
+            activeOpacity={0.8}
+          >
+            {copiedStk ? <CheckCircle2 size={14} color={S.emerald} /> : <Copy size={14} color={S.text} />}
+            <Text style={styles.copyBtnText}>{copiedStk ? 'Đã chép' : 'Copy STK'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Transfer Content Row */}
+        <View style={styles.bankCopyRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bankLabel}>Nội dung nạp:</Text>
+            <Text style={styles.bankValHighlight}>{contentStr}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.copyBtnPill}
+            onPress={() => copyText(contentStr, 'content')}
+            activeOpacity={0.8}
+          >
+            {copiedContent ? <CheckCircle2 size={14} color={S.emerald} /> : <Copy size={14} color={S.text} />}
+            <Text style={styles.copyBtnText}>{copiedContent ? 'Đã chép' : 'Copy Nội dung'}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+});
+
+// 3. VIP Package Selector Widget
+const VipPackagesWidget = memo(({ onSelectPackage }: { onSelectPackage: (pkg: string, cost: number) => void }) => {
+  const haptic = useHaptic();
+
+  return (
+    <View style={styles.widgetBox}>
+      <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={['rgba(251,191,36,0.08)', 'rgba(0,229,255,0.04)']} style={StyleSheet.absoluteFill} />
+
+      <View style={styles.widgetHeaderRow}>
+        <Crown size={16} color={S.amber} />
+        <Text style={[styles.widgetTitleText, { color: S.amber }]}>BẢNG GIÁ VIP IPAVIET CHỐNG THU HỒI</Text>
+      </View>
+
+      <View style={{ gap: 10, marginTop: 10 }}>
+        <TouchableOpacity
+          style={styles.vipPkgCard}
+          onPress={() => {
+            haptic('medium');
+            onSelectPackage('Gói VIP 1 Tháng', 50000);
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.vipPkgName}>Gói VIP 1 Tháng</Text>
+
+            <Text style={styles.vipPkgDesc}>Tải max tốc độ, ký cert riêng chống văng</Text>
+          </View>
+          <View style={styles.vipPkgPriceBox}>
+            <Text style={styles.vipPkgPriceText}>50.000đ</Text>
+            <Text style={styles.vipPkgBuyText}>Đăng ký</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.vipPkgCard, { borderColor: S.amber }]}
+          onPress={() => {
+            haptic('heavy');
+            onSelectPackage('Gói VIP 1 Năm (Khuyên Dùng)', 300000);
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.vipPkgName}>Gói VIP 1 Năm</Text>
+              <View style={styles.bestTag}><Text style={styles.bestTagText}>HOT</Text></View>
+            </View>
+            <Text style={styles.vipPkgDesc}>Tiết kiệm 50%, bảo hành thu hồi trọn đời</Text>
+          </View>
+          <View style={styles.vipPkgPriceBox}>
+            <Text style={[styles.vipPkgPriceText, { color: S.amber }]}>300.000đ</Text>
+            <Text style={styles.vipPkgBuyText}>Đăng ký</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+/* ═══════════════════════════════════════════════════════════════
    LIQUID INPUT — Floating Glass Bar
    ═══════════════════════════════════════════════════════════════ */
 
@@ -395,7 +619,7 @@ const LiquidInput = memo(({ value, onChangeText, onSubmit, onFocusChange }: Liqu
       />
       <TextInput
         style={styles.liquidInput}
-        placeholder="Nói với Intelligence..."
+        placeholder="Yêu cầu AI bất kỳ điều gì (gõ 'ipa youtube', 'nạp xu', 'chứng chỉ')..."
         placeholderTextColor={S.textTertiary}
         value={value}
         onChangeText={onChangeText}
@@ -538,7 +762,7 @@ const SpatialAppCard = memo(({ app, onPress, index }: { app: AppItem; onPress: (
 
           <View style={styles.cardAction}>
             <TouchableOpacity style={styles.cardButton} onPress={onPress} activeOpacity={0.8}>
-              <Text style={styles.cardButtonText}>Mở</Text>
+              <Text style={styles.cardButtonText}>TẢI IPA NGAY</Text>
               <ChevronRight size={12} color={S.void} strokeWidth={3} />
             </TouchableOpacity>
           </View>
@@ -590,10 +814,20 @@ const ActionChip = memo(({ action, onPress, index }: { action: CommandAction; on
   );
 });
 
-const MessageEntity = memo(({ message, onAction, onAppPress }: {
+const MessageEntity = memo(({
+  message,
+  onAction,
+  onAppPress,
+  onCertComplete,
+  onSelectVipPkg,
+  userEmail,
+}: {
   message: IntelligenceMessage;
   onAction: (a: CommandAction) => void;
   onAppPress: (id: string) => void;
+  onCertComplete: (filename: string, pass: string) => void;
+  onSelectVipPkg: (pkg: string, cost: number) => void;
+  userEmail?: string;
 }) => {
   const entry = useSharedValue(0);
   const isUser = message.sender === 'user';
@@ -622,7 +856,7 @@ const MessageEntity = memo(({ message, onAction, onAppPress }: {
       <View style={styles.intentRow}>
         <View style={styles.intentDot} />
         <Text style={styles.intentLabel}>
-          {message.isProcessing ? 'Đang phân tích...' : 'Intelligence'}
+          {message.isProcessing ? 'Đang xử lý tự động...' : 'Autonomous AI'}
         </Text>
         <Text style={styles.entityTime}>{message.timestamp}</Text>
       </View>
@@ -630,6 +864,19 @@ const MessageEntity = memo(({ message, onAction, onAppPress }: {
       <View style={styles.entityContent}>
         <IntelligenceText text={message.text} />
       </View>
+
+      {/* Embedded Widgets */}
+      {message.widgetType === 'cert_import' && (
+        <CertImportWidget onComplete={onCertComplete} />
+      )}
+
+      {message.widgetType === 'bank_deposit' && (
+        <BankDepositWidget userEmail={userEmail} />
+      )}
+
+      {message.widgetType === 'vip_packages' && (
+        <VipPackagesWidget onSelectPackage={onSelectVipPkg} />
+      )}
 
       {message.appCards && message.appCards.length > 0 && (
         <ScrollView
@@ -666,7 +913,7 @@ const MessageEntity = memo(({ message, onAction, onAppPress }: {
 });
 
 /* ═══════════════════════════════════════════════════════════════
-   COMMAND CENTER — Intent Engine
+   SMART AUTONOMOUS INTENT ENGINE
    ═══════════════════════════════════════════════════════════════ */
 
 function removeAccents(str: string) {
@@ -678,89 +925,96 @@ interface ProcessResult {
   actions: CommandAction[];
   appCards?: AppItem[];
   intent: IntentType;
+  widgetType?: 'cert_import' | 'bank_deposit' | 'vip_packages' | 'app_search';
 }
 
-const processIntent = (raw: string, apps: AppItem[], userEmail?: string): ProcessResult => {
+const processSmartIntent = (raw: string, apps: AppItem[], userEmail?: string): ProcessResult => {
   const t = removeAccents(raw);
 
-  if (t.includes('vip') || t.includes('gia han') || t.includes('mua goi') || t.includes('nang cap')) {
+  // Newbie / Certificate Guide -> Embedded Cert Import Form Widget
+  if (t.includes('nguoi moi') || t.includes('moi dung') || t.includes('khong biet') || t.includes('chi toi') || t.includes('cert') || t.includes('p12') || t.includes('huong dan')) {
     return {
-      text: 'Tôi đã chuẩn bị sẵn các gói VIP cho bạn. Đặc quyền bao gồm tải không giới hạn, ký app ngoại tuyến và hỗ trợ 24/7.',
+      text: `Dạ em đã kiểm tra trên hệ thống và thấy sếp cần nạp chứng chỉ P12. Sếp không cần tự thao tác thủ công, hãy chọn tệp ZIP chứng chỉ và nhập mật khẩu ngay bên dưới để em tự động ký App cho sếp nhé!`,
+      widgetType: 'cert_import',
       actions: [
-        { label: 'Xem gói VIP', route: '/buy-vip', style: 'primary' },
-        { label: 'Nạp xu trước', route: '/account', style: 'secondary' },
+        { label: '🛠️ Mở Trang Ký Chi Tiết', route: '/sign', style: 'primary' },
+        { label: '👑 Mua Gói VIP Không Cần P12', route: '/buy-vip', style: 'secondary' },
       ],
-      intent: 'vip',
+      intent: 'cert_import',
     };
   }
 
-  if (t.includes('ky app') || t.includes('vsign') || t.includes('cert') || t.includes('p12') || t.includes('provision')) {
+  // Recharge / Deposit -> Embedded Bank Copy Deposit Card Widget
+  if (t.includes('nap') || t.includes('tien') || t.includes('xu') || t.includes('bank') || t.includes('ngan hang') || t.includes('stk')) {
     return {
-      text: 'Bạn có thể ký IPA trực tiếp trên thiết bị. Hãy chuẩn bị file chứng chỉ ZIP chứa P12 và MobileProvision.',
+      text: `Dạ em đã tạo sẵn thẻ nạp xu tự động qua ACB cho sếp đây ạ. Sếp bấm nút "Copy STK" và "Copy Nội Dung" bên dưới để chuyển khoản, xu sẽ được cộng tự động sau 10 giây!`,
+      widgetType: 'bank_deposit',
       actions: [
-        { label: 'Mở ký app', route: '/sign', style: 'primary' },
-        { label: 'Nạp chứng chỉ', route: '/sign?importCert=true', style: 'secondary' },
-      ],
-      intent: 'sign',
-    };
-  }
-
-  if (t.includes('nap') || t.includes('tien') || t.includes('xu') || t.includes('bank') || t.includes('chuyen khoan')) {
-    return {
-      text: `Hệ thống nạp xu tự động qua ACB (STK 22703611 - TRAN NGUYEN MINH QUI). Nội dung NAP ${userEmail || 'Email'}. Xu cộng tự động sau 10-30 giây.`,
-      actions: [
-        { label: 'Đến trang nạp', route: '/account', style: 'primary' },
+        { label: '💳 Mở Trang Tài Khoản', route: '/account', style: 'primary' },
       ],
       intent: 'recharge',
     };
   }
 
-  if (t.includes('crash') || t.includes('loi') || t.includes('thu hoi') || t.includes('vang') || t.includes('khong mo')) {
+  // VIP Upgrade -> Embedded VIP Packages Selector Widget
+  if (t.includes('vip') || t.includes('gia han') || t.includes('mua goi') || t.includes('nang cap')) {
     return {
-      text: 'Apple đã thu hồi chứng chỉ doanh nghiệp. Gỡ app bị lỗi, ký lại bằng chứng chỉ cá nhân hoặc dùng gói VIP độc quyền chống thu hồi.',
+      text: `Dạ em đã chuẩn bị sẵn bảng giá các gói VIP IPAVIET độc quyền cho sếp. Chọn gói bên dưới để nâng cấp tự động nhé!`,
+      widgetType: 'vip_packages',
       actions: [
-        { label: 'Mua VIP ngay', route: '/buy-vip', style: 'primary' },
-        { label: 'Tự ký lại', route: '/sign', style: 'secondary' },
+        { label: '💳 Nạp Xu Trước', route: '/account', style: 'secondary' },
       ],
-      intent: 'crash',
+      intent: 'vip_upgrade',
     };
   }
 
-  if (t.includes('tim') || t.includes('app') || t.includes('game') || t.includes('ipa') || t.includes('youtube') || t.includes('facebook') || t.includes('tiktok')) {
-    const q = raw.replace(/(tim|app|ipa|game|cho|xem|can|muon)/gi, '').trim();
+  // App / IPA Search -> Instant Matched App Cards with Direct Install Actions
+  if (t.includes('tim') || t.includes('app') || t.includes('game') || t.includes('ipa') || t.includes('youtube') || t.includes('facebook') || t.includes('tiktok') || t.includes('pubg') || t.includes('mod') || t.includes('hack')) {
+    const q = raw.replace(/(tim|app|ipa|game|cho|xem|can|muon|bản|tải|down|download)/gi, '').trim();
     const matched = q.length >= 2 ? apps.filter(a =>
       removeAccents(a.name).includes(removeAccents(q)) ||
       removeAccents(a.category || '').includes(removeAccents(q))
-    ).slice(0, 3) : [];
+    ).slice(0, 4) : [];
 
     if (matched.length > 0) {
       return {
-        text: `Tìm thấy ${matched.length} ứng dụng phù hợp với yêu cầu của bạn.`,
+        text: `Dạ em đã tìm thấy ${matched.length} ứng dụng Mod/Tweak ngon nhất đúng yêu cầu của sếp đây ạ! Bấm "TẢI IPA NGAY" để cài đặt tự động nhé:`,
         appCards: matched,
         actions: [
-          { label: 'Mở Kho IPA', route: '/apps', style: 'primary' },
-          { label: 'Kho VIP', route: '/vip', style: 'secondary' },
+          { label: '📦 Mở Tất Cả Trong Kho IPA', route: '/apps', style: 'primary' },
         ],
         intent: 'search',
       };
     }
     return {
-      text: 'Kho IPA có hàng trăm app mod/tweak sẵn. Bạn có thể tìm kiếm trực tiếp hoặc yêu cầu admin hỗ trợ nạp app mới.',
+      text: `Dạ Kho IPA hiện có hàng trăm app Mod/Cheat sẵn. Sếp có thể bấm mở Kho IPA bên dưới hoặc nhắn tên App cụ thể để em tìm nhé!`,
       actions: [
-        { label: 'Khám phá Kho IPA', route: '/apps', style: 'primary' },
-        { label: 'Kho VIP', route: '/vip', style: 'secondary' },
+        { label: 'Khám Phá Kho IPA', route: '/apps', style: 'primary' },
+        { label: 'Kho App VIP', route: '/vip', style: 'secondary' },
       ],
       intent: 'search',
     };
   }
 
+  // App Crash / Revoke -> Cert Widget + VIP Widget Combo
+  if (t.includes('crash') || t.includes('loi') || t.includes('thu hoi') || t.includes('vang') || t.includes('khong mo')) {
+    return {
+      text: `Nguyên nhân do Apple đã thu hồi chứng chỉ doanh nghiệp dùng chung. Sếp nạp lại tệp P12 cá nhân bên dưới để em ký lại, hoặc nâng cấp VIP để dùng chứng chỉ độc quyền chống văng app 100%!`,
+      widgetType: 'cert_import',
+      actions: [
+        { label: '👑 Mua Chứng Chỉ VIP', route: '/buy-vip', style: 'primary' },
+        { label: '🛠️ Tự Ký Lại App', route: '/sign', style: 'secondary' },
+      ],
+      intent: 'crash',
+    };
+  }
+
   return {
-    text: 'Tôi là Intelligence của IPAVIET OS. Tôi có thể giúp bạn gia hạn VIP, ký IPA, nạp xu, tìm app, hoặc xử lý lỗi.',
+    text: `Dạ em là Trợ Lý Ảo Autonomous AI của IPAVIET OS đây ạ! Em có thể tự động ký App, tạo thẻ nạp xu ACB, hướng dẫn nạp P12 và tìm kiếm bất kỳ bản IPA Mod nào cho sếp. Sếp nhắn yêu cầu nhé!`,
     actions: [
-      { label: 'Gia hạn VIP', route: '/buy-vip', style: 'primary' },
-      { label: 'Ký IPA', route: '/sign', style: 'secondary' },
-      { label: 'Nạp xu', route: '/account', style: 'secondary' },
-      { label: 'Tìm app', route: '/apps', style: 'ghost' },
+      { label: '🚀 Nạp Chứng Chỉ P12', route: '/sign', style: 'primary' },
+      { label: '💳 Thẻ Nạp Xu ACB', route: '/account', style: 'secondary' },
+      { label: '👑 Bảng Giá VIP', route: '/buy-vip', style: 'secondary' },
     ],
     intent: 'greeting',
   };
@@ -782,7 +1036,7 @@ export default function AiSupportScreen() {
   const [apps, setApps] = useState<AppItem[]>([]);
 
   const scrollViewRef = useRef<ScrollView>(null);
-  const keyboardOffset = useSharedValue(0);
+  const keyboard = useAnimatedKeyboard({ isStatusBarTranslucentAndroid: true });
 
   useEffect(() => {
     Promise.all([fetchRegularApps(), fetchVIPApps()]).then(([reg, vip]) => {
@@ -790,37 +1044,22 @@ export default function AiSupportScreen() {
     });
   }, []);
 
-  // Smooth Reanimated 120Hz Keyboard Slide-Up
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const showSub = Keyboard.addListener(showEvent, (e) => {
-      const targetOffset = -e.endCoordinates.height + (Platform.OS === 'ios' ? 24 : 0);
-      keyboardOffset.value = withTiming(targetOffset, {
-        duration: e.duration || 250,
-        easing: Easing.out(Easing.cubic),
-      });
+    const sub = Keyboard.addListener(showEvent, () => {
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      }, 50);
     });
-
-    const hideSub = Keyboard.addListener(hideEvent, (e) => {
-      keyboardOffset.value = withTiming(0, {
-        duration: e.duration || 250,
-        easing: Easing.out(Easing.cubic),
-      });
-    });
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
+    return () => sub.remove();
   }, []);
 
   const animatedDockStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: keyboardOffset.value }],
+    transform: [{ translateY: -keyboard.height.value }],
+  }));
+
+  const animatedScrollPaddingStyle = useAnimatedStyle(() => ({
+    paddingBottom: 130 + keyboard.height.value,
   }));
 
   const scrollToBottom = useCallback(() => {
@@ -846,7 +1085,7 @@ export default function AiSupportScreen() {
       scrollToBottom();
 
       setTimeout(() => {
-        const res = processIntent(textToSend, apps, userState.user?.email);
+        const res = processSmartIntent(textToSend, apps, userState.user?.email);
         const botMsg: IntelligenceMessage = {
           id: (Date.now() + 1).toString(),
           sender: 'intelligence',
@@ -855,6 +1094,7 @@ export default function AiSupportScreen() {
           actions: res.actions,
           appCards: res.appCards,
           intent: res.intent,
+          widgetType: res.widgetType,
         };
 
         setOrbState('speaking');
@@ -891,6 +1131,50 @@ export default function AiSupportScreen() {
     [router]
   );
 
+  const handleCertComplete = useCallback((filename: string, pass: string) => {
+    haptic('success');
+    const responseMsg: IntelligenceMessage = {
+      id: Date.now().toString(),
+      sender: 'intelligence',
+      text: `🎉 **Đã Nhận & Lưu Chứng Chỉ Thành Công!**\n\nEm đã lưu tệp chứng chỉ **${filename}** (Mật khẩu: \`${pass}\`). Bây giờ sếp chọn ứng dụng IPA bên dưới để em tự động ký ngay cho sếp nhé!`,
+      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      actions: [
+        { label: '🚀 KÝ APP IPA BẤT KỲ NGAY', route: '/sign', style: 'primary' },
+        { label: '📦 XEM KHO IPA', route: '/apps', style: 'secondary' },
+      ],
+    };
+    setMessages((prev) => [...prev, responseMsg]);
+    scrollToBottom();
+  }, [haptic, scrollToBottom]);
+
+  const handleSelectVipPkg = useCallback((pkg: string, cost: number) => {
+    if (userState.coins < cost) {
+      haptic('warning');
+      Alert.alert(
+        'Số Dư Không Đủ',
+        `Sếp hiện có ${userState.coins.toLocaleString('vi-VN')}đ, cần thêm ${(cost - userState.coins).toLocaleString('vi-VN')}đ để đăng ký ${pkg}. Sếp bấm "Nạp Xu" để chuyển khoản nhé!`,
+        [
+          { text: 'Để Sau', style: 'cancel' },
+          { text: 'Nạp Xu Ngay', onPress: () => handleSendText('nạp xu ngân hàng') },
+        ]
+      );
+
+      const botMsg: IntelligenceMessage = {
+        id: Date.now().toString(),
+        sender: 'intelligence',
+        text: `⚠️ **Số dư xu chưa đủ để mua ${pkg}**\n\nEm tạo sẵn thẻ nạp xu ACB bên dưới cho sếp chuyển khoản nhé:`,
+        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        widgetType: 'bank_deposit',
+      };
+      setMessages((prev) => [...prev, botMsg]);
+      scrollToBottom();
+      return;
+    }
+
+    haptic('success');
+    Alert.alert('Xác Nhận VIP', `Sếp có muốn đăng ký ${pkg} với giá ${cost.toLocaleString('vi-VN')}đ không?`);
+  }, [userState, haptic, handleSendText, scrollToBottom]);
+
   const resetChat = useCallback(() => {
     haptic('success');
     setMessages([]);
@@ -898,11 +1182,11 @@ export default function AiSupportScreen() {
   }, [haptic]);
 
   const suggestions = [
-    { label: 'Gia hạn VIP', query: 'gia han vip', icon: <Crown size={15} color="#FBBF24" /> },
-    { label: 'Ký App IPA', query: 'ky app vsign', icon: <Wrench size={15} color="#A78BFA" /> },
-    { label: 'Lỗi chứng chỉ', query: 'loi chung chi app crash', icon: <AlertTriangle size={15} color="#FB7185" /> },
-    { label: 'Nạp xu ACB', query: 'nap tien ngan hang', icon: <Wallet size={15} color="#34D399" /> },
-    { label: 'Tìm IPA YouTube', query: 'tim ipa youtube', icon: <Sparkles size={15} color="#00E5FF" /> },
+    { label: 'Hướng dẫn người mới', query: 'huong dan nguoi moi nap cert', icon: <HelpCircle size={15} color="#00E5FF" /> },
+    { label: 'Tìm IPA YouTube', query: 'ipa youtube', icon: <Sparkles size={15} color="#A78BFA" /> },
+    { label: 'Thẻ nạp xu ACB', query: 'nap xu bank acb', icon: <Wallet size={15} color="#34D399" /> },
+    { label: 'Bảng giá VIP', query: 'gia han vip', icon: <Crown size={15} color="#FBBF24" /> },
+    { label: 'Lỗi app văng', query: 'loi chung chi app crash', icon: <AlertTriangle size={15} color="#FB7185" /> },
     { label: 'Admin hỗ trợ', query: 'lien he zalo admin', icon: <MessageSquare size={15} color="#60A5FA" /> },
   ];
 
@@ -923,10 +1207,10 @@ export default function AiSupportScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitleText}>IPAVIET Intelligence</Text>
+            <Text style={styles.headerTitleText}>IPAVIET Autonomous AI</Text>
             <View style={styles.statusChip}>
               <View style={[styles.statusDot, { backgroundColor: S.emerald }]} />
-              <Text style={styles.statusText}>{userState.user ? userState.user.email : 'Spatial OS 2026'}</Text>
+              <Text style={styles.statusText}>{userState.user ? userState.user.email : 'Autonomous OS 2026'}</Text>
             </View>
           </View>
 
@@ -938,13 +1222,13 @@ export default function AiSupportScreen() {
 
       {/* Main Content Area */}
       <View style={{ flex: 1, paddingTop: Platform.OS === 'ios' ? 94 : 70 }}>
-        <Animated.View style={[{ flex: 1 }, animatedDockStyle]}>
-          <ScrollView
-            ref={scrollViewRef}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 140 }}
-            showsVerticalScrollIndicator={false}
-          >
+        <ScrollView
+          ref={scrollViewRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View style={animatedScrollPaddingStyle}>
             {/* Energy Orb Header */}
             <View style={styles.orbHeaderBox}>
               <EnergyOrb state={orbState} />
@@ -954,7 +1238,7 @@ export default function AiSupportScreen() {
                     Xin chào, <Text style={{ color: S.cyan }}>{userState.user?.displayName || 'Sếp'}</Text>
                   </Text>
                   <Text style={styles.heroSubText}>
-                    Hệ thống Trợ lý Ảo Spatial Intelligence đã sẵn sàng hỗ trợ ký App, nạp xu và tra cứu dữ liệu.
+                    Em là Autonomous AI. Em có thể tự động ký App, tạo thẻ nạp xu ACB, hướng dẫn nạp P12 và tìm IPA Mod cho sếp.
                   </Text>
                 </View>
               )}
@@ -984,12 +1268,15 @@ export default function AiSupportScreen() {
                 message={m}
                 onAction={handleAction}
                 onAppPress={handleAppPress}
+                onCertComplete={handleCertComplete}
+                onSelectVipPkg={handleSelectVipPkg}
+                userEmail={userState.user?.email}
               />
             ))}
-          </ScrollView>
-        </Animated.View>
+          </Animated.View>
+        </ScrollView>
 
-        {/* Animated Floating Bottom Dock (Input + Quick Suggestions with Smooth 120Hz Reanimated Slide-Up) */}
+        {/* Animated Floating Bottom Dock */}
         <Animated.View style={[styles.bottomFloatingDock, animatedDockStyle]}>
           {/* Quick Suggestion Scroll Bar above Input */}
           <View style={styles.quickBarRow}>
@@ -1202,7 +1489,7 @@ const styles = StyleSheet.create({
 
   // Intelligence Entity
   intelligenceEntity: {
-    marginBottom: 28,
+    marginBottom: 24,
   },
   intentRow: {
     flexDirection: 'row',
@@ -1249,6 +1536,184 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontWeight: '500',
     color: S.textPrimary,
+  },
+
+  // Embedded Widget Box
+  widgetBox: {
+    marginTop: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    padding: 16,
+    overflow: 'hidden',
+  },
+  widgetHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  widgetTitleText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: S.cyan,
+    letterSpacing: 0.5,
+  },
+  widgetPickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  widgetPickBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: S.textSecondary,
+    flex: 1,
+  },
+  widgetInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    marginTop: 10,
+  },
+  widgetTextInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: S.text,
+    height: '100%',
+    padding: 0,
+  },
+  widgetSubmitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 46,
+    borderRadius: 14,
+    marginTop: 14,
+    overflow: 'hidden',
+  },
+  widgetSubmitBtnText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: S.void,
+    letterSpacing: 0.2,
+  },
+
+  // Bank Deposit Widget Details
+  bankDetailCard: {
+    gap: 10,
+    marginTop: 4,
+  },
+  bankDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  bankLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: S.textSecondary,
+  },
+  bankValBold: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: S.textPrimary,
+  },
+  bankValHighlight: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: S.emerald,
+    marginTop: 2,
+  },
+  bankCopyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  copyBtnPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  copyBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: S.text,
+  },
+
+  // VIP Package Cards Widget
+  vipPkgCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  vipPkgName: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: S.text,
+  },
+  vipPkgDesc: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: S.textSecondary,
+    marginTop: 3,
+  },
+  vipPkgPriceBox: {
+    alignItems: 'flex-end',
+  },
+  vipPkgPriceText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: S.cyan,
+  },
+  vipPkgBuyText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: S.void,
+    backgroundColor: S.text,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  bestTag: {
+    backgroundColor: S.amber,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  bestTagText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: S.void,
   },
 
   // App Cards Row
@@ -1414,7 +1879,7 @@ const styles = StyleSheet.create({
   },
   liquidInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: S.text,
     height: '100%',
