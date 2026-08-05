@@ -338,23 +338,22 @@ export default function AccountScreen() {
         console.log("[Google Auth] Redirect URL:", redirectUrl);
         const authUrl = `https://ipaviet.site/login-app.html?redirect_uri=${encodeURIComponent(redirectUrl)}`;
         const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
-        console.log("[Google Auth] Result:", JSON.stringify(result));
+        console.log("[Google Auth] WebBrowser Result:", JSON.stringify(result));
 
         if (result.type === 'success' && result.url) {
           const parsed = Linking.parse(result.url);
-          const token = (parsed.queryParams?.idToken || parsed.queryParams?.token) as string;
-          console.log("[Google Auth] Received token:", token ? token.substring(0, 15) + '...' : 'null');
+          const { idToken, accessToken } = parsed.queryParams as any;
+          const token = idToken || accessToken;
+          console.log("[Google Auth] Parsed params:", { hasIdToken: !!idToken, hasAccessToken: !!accessToken });
+          
           if (token) {
             try {
-              const credential = GoogleAuthProvider.credential(token);
+              const credential = GoogleAuthProvider.credential(idToken || null, accessToken || null);
               await signInWithCredential(auth, credential);
+              console.log("[Google Auth] Successfully signed in!");
             } catch (credError: any) {
-              try {
-                await signInWithCustomToken(auth, token);
-              } catch (customErr) {
-                console.error("Token auth failed:", customErr);
-                Alert.alert("Lỗi", "Không thể xác thực Token Google.");
-              }
+              console.error("[Google Auth Credential Error]:", credError?.code, credError?.message);
+              Alert.alert(TXT.errorLabel, 'Xác thực Google thất bại: ' + (credError?.message || 'Token không hợp lệ'));
             }
           }
         }
