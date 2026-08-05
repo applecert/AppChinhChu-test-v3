@@ -14,10 +14,10 @@ import JSZip from 'jszip';
 import { 
   Palette, Languages, ShieldCheck, FileKey, Trash2, PlusCircle, 
   CheckCircle2, X, RefreshCw, Info, ChevronRight, ChevronLeft, Award, HardDrive,
-  Scissors, Bell
+  Scissors, Bell, Zap
 } from 'lucide-react-native';
 
-import { COLORS, SIZES, SHADOWS, useThemeUpdate, notifyThemeChange, loadTheme, loadLanguage, THEME_STYLES, TRANSLATIONS, TXT } from '../constants/theme';
+import { COLORS, SIZES, SHADOWS, useThemeUpdate, notifyThemeChange, loadTheme, loadLanguage, THEME_STYLES, TRANSLATIONS, TXT, loadFpsMode, saveFpsMode, FpsMode } from '../constants/theme';
 import { SPRINGS, entranceAnim } from '../constants/animations';
 
 const { width } = Dimensions.get('window');
@@ -245,10 +245,20 @@ export default function SettingsScreen() {
     const lang = await AsyncStorage.getItem('@app_lang') || 'vi';
     const activeCert = await AsyncStorage.getItem('@active_cert_id');
     const bgMode = await AsyncStorage.getItem('@background_mode') === 'true';
+    const fps = await loadFpsMode();
     setCurrentThemeStyle(style);
     setCurrentLang(lang);
     setActiveCertId(activeCert);
     setIsBackgroundMode(bgMode);
+    setFpsMode(fps);
+  };
+
+  const [fpsMode, setFpsMode] = useState<FpsMode>('120fps');
+
+  const changeFpsMode = async (mode: FpsMode) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFpsMode(mode);
+    await saveFpsMode(mode);
   };
 
   const toggleBackgroundMode = async () => {
@@ -789,7 +799,52 @@ export default function SettingsScreen() {
 
 
 
-      {/* SECTION 3: THIẾT LẬP HỆ THỐNG */}
+      {/* SECTION 3: TẦN SỐ QUÉT & HIỆU NĂNG */}
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: COLORS.textMuted }]}>TẦN SỐ QUÉT & HIỆU NĂNG</Text>
+      </View>
+
+      <View style={[styles.cardGroup, { backgroundColor: COLORS.surfaceCard, borderColor: COLORS.border }]}>
+        <TouchableOpacity
+          style={[styles.rowItem, { borderBottomWidth: 1, borderBottomColor: COLORS.border }]}
+          activeOpacity={0.8}
+          onPress={() => changeFpsMode('120fps')}
+        >
+          <View style={styles.rowLabelContainer}>
+            <Zap color={fpsMode === '120fps' ? COLORS.primary : COLORS.textMuted} size={18} strokeWidth={2.2} />
+            <View style={{ marginLeft: 4 }}>
+              <Text style={[styles.rowLabel, { color: COLORS.text, fontWeight: fpsMode === '120fps' ? '700' : '500' }]}>
+                ⚡ 120 FPS ProMotion
+              </Text>
+              <Text style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 2 }}>
+                Lấy mẫu cuộn 1ms — Tối đa 120Hz mượt bứt phá
+              </Text>
+            </View>
+          </View>
+          {fpsMode === '120fps' && <CheckCircle2 color={COLORS.primary} size={18} />}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.rowItem}
+          activeOpacity={0.8}
+          onPress={() => changeFpsMode('60fps')}
+        >
+          <View style={styles.rowLabelContainer}>
+            <Zap color={fpsMode === '60fps' ? COLORS.primary : COLORS.textMuted} size={18} strokeWidth={2.2} />
+            <View style={{ marginLeft: 4 }}>
+              <Text style={[styles.rowLabel, { color: COLORS.text, fontWeight: fpsMode === '60fps' ? '700' : '500' }]}>
+                🔋 60 FPS Standard
+              </Text>
+              <Text style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 2 }}>
+                Lấy mẫu cuộn 16ms — Tiết kiệm thời lượng pin
+              </Text>
+            </View>
+          </View>
+          {fpsMode === '60fps' && <CheckCircle2 color={COLORS.primary} size={18} />}
+        </TouchableOpacity>
+      </View>
+
+      {/* SECTION 4: THIẾT LẬP HỆ THỐNG */}
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: COLORS.textMuted }]}>{TXT.systemSettingsSection}</Text>
       </View>

@@ -678,3 +678,28 @@ export const TYPOGRAPHY = {
     letterSpacing: 0,
   },
 };
+
+// ═══════════════════════════════════════════════════════════════
+// HỆ THỐNG CẤU HÌNH FPS MODE (60 FPS VS 120 FPS PROMOTION)
+// ═══════════════════════════════════════════════════════════════
+export type FpsMode = '120fps' | '60fps';
+export let CURRENT_FPS_MODE: FpsMode = '120fps';
+
+export const loadFpsMode = async (): Promise<FpsMode> => {
+  try {
+    const saved = await AsyncStorage.getItem('app_fps_mode');
+    if (saved === '60fps' || saved === '120fps') {
+      CURRENT_FPS_MODE = saved;
+      return saved;
+    }
+  } catch {}
+  CURRENT_FPS_MODE = '120fps';
+  return '120fps';
+};
+
+export const saveFpsMode = async (mode: FpsMode): Promise<void> => {
+  try {
+    CURRENT_FPS_MODE = mode;
+    await AsyncStorage.setItem('app_fps_mode', mode);
+  } catch {}
+};

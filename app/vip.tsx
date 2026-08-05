@@ -94,13 +94,17 @@ export default function VIPScreen() {
 
     let unsubDoc: any;
     if (auth.currentUser) {
-      unsubDoc = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snap) => {
-        if (snap.exists() && checkVipStatus(snap.data().vipExpire)) {
-          setIsUserVip(true);
-        } else {
-          setIsUserVip(false);
-        }
-      });
+      unsubDoc = onSnapshot(
+        doc(db, 'users', auth.currentUser.uid),
+        (snap) => {
+          if (snap.exists() && checkVipStatus(snap.data().vipExpire)) {
+            setIsUserVip(true);
+          } else {
+            setIsUserVip(false);
+          }
+        },
+        (err) => console.warn('[VIP Snapshot Warning]:', err?.message || err)
+      );
     }
     return () => { if (unsubDoc) unsubDoc(); };
   }, []);

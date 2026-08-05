@@ -20,10 +20,37 @@ import {
 } from 'lucide-react-native';
 
 import { auth, db } from '../firebaseConfig';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithCustomToken } from 'firebase/auth';
 import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { COLORS, SIZES, SHADOWS, TXT, useThemeUpdate, THEME_STYLES } from '../constants/theme';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
+import Svg, { Path } from 'react-native-svg';
+
+WebBrowser.maybeCompleteAuthSession();
+
+function GoogleLogo({ size = 20 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+        fill="#4285F4"
+      />
+      <Path
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        fill="#34A853"
+      />
+      <Path
+        d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.62z"
+        fill="#FBBC05"
+      />
+      <Path
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+        fill="#EA4335"
+      />
+    </Svg>
+  );
+}
 
 const { width } = Dimensions.get('window');
 const GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbyXnH5KjwQVafxGW_W2KlpDY9KHBx_0TAmaNZBqUaPz9WR8T1PDKwB9un37fNA_YO7pmg/exec";
@@ -51,6 +78,7 @@ export default function AccountScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [sysPopup, setSysPopup] = useState({ show: false, msg: '' });
+  const [googleModalVisible, setGoogleModalVisible] = useState(false);
   
   const [captchaState, setCaptchaState] = useState<'idle' | 'checking' | 'interactive' | 'success'>('idle');
   const captchaTimeoutRef = useRef<any>(null);
@@ -83,9 +111,28 @@ export default function AccountScreen() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setIsLoggedIn(true);
-        unsubDoc = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
-          if (docSnap.exists()) setUserData(docSnap.data() as UserData);
-        });
+        try { WebBrowser.dismissAuthSession(); } catch (e) {}
+        setGoogleModalVisible(false);
+        
+        // Match account.html web logic: Create user Firestore doc if missing
+        const userRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(userRef);
+        if (!docSnap.exists()) {
+          await setDoc(userRef, {
+            email: user.email || '',
+            username: user.displayName || user.email?.split('@')[0] || 'Hội Viên Mới',
+            coins: 0,
+            createdAt: new Date(),
+          });
+        }
+
+        unsubDoc = onSnapshot(
+          userRef,
+          (snap) => {
+            if (snap.exists()) setUserData(snap.data() as UserData);
+          },
+          (err) => console.warn('[Account Snapshot Warning]:', err?.message || err)
+        );
         const snapConfig = await getDoc(doc(db, 'settings', 'config'));
         if (snapConfig.exists() && snapConfig.data().showPopup) setSysPopup({ show: true, msg: snapConfig.data().popupMsg });
       } else {
@@ -270,6 +317,48 @@ export default function AccountScreen() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    try {
+      if (Platform.OS === 'web') {
+        const { signInWithPopup } = require('firebase/auth');
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+      } else {
+        const redirectUrl = Linking.createURL('/account');
+        const authUrl = `https://ipaviet.site/login-app.html?redirect_uri=${encodeURIComponent(redirectUrl)}`;
+        const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
+
+        if (result.type === 'success' && result.url) {
+          const parsed = Linking.parse(result.url);
+          const token = parsed.queryParams?.idToken as string;
+          if (token) {
+            try {
+              const credential = GoogleAuthProvider.credential(token);
+              await signInWithCredential(auth, credential);
+            } catch (credError: any) {
+              if (credError?.code === 'auth/invalid-credential' || credError?.message?.includes('not issued by Google')) {
+                await signInWithCustomToken(auth, token);
+              } else {
+                throw credError;
+              }
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error("[Google Sign-In Error]:", error);
+      Alert.alert(
+        TXT.errorLabel,
+        TXT.langName === 'English'
+          ? 'Google Sign-In failed: ' + (error?.message || error)
+          : 'Đăng nhập Google thất bại: ' + (error?.message || error)
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     Alert.alert(TXT.confirmLogoutTitle, TXT.confirmLogoutMsg, [{ text: TXT.cancelBtn, style: 'cancel' }, { text: TXT.confirmExit, style: 'destructive', onPress: async () => { setIsLoading(true); await signOut(auth); setPassword(''); }}]);
   };
@@ -408,8 +497,32 @@ export default function AccountScreen() {
                     </LinearGradient>
                   </TouchableOpacity>
                 </Animated.View>
+
+                {/* DIVIDER */}
+                <View style={styles.authDividerRow}>
+                  <View style={styles.authDividerLine} />
+                  <Text style={styles.authDividerText}>
+                    {TXT.langName === 'English' ? 'OR' : 'HOẶC'}
+                  </Text>
+                  <View style={styles.authDividerLine} />
+                </View>
+
+                {/* GOOGLE SIGN-IN BUTTON */}
+                <TouchableOpacity
+                  style={styles.googleBtn}
+                  activeOpacity={0.85}
+                  onPress={handleGoogleSignIn}
+                  disabled={isLoading}
+                >
+                  <View style={styles.googleIconBox}>
+                    <GoogleLogo size={20} />
+                  </View>
+                  <Text style={styles.googleBtnText}>
+                    {TXT.langName === 'English' ? 'Continue with Google' : 'Đăng nhập bằng Google'}
+                  </Text>
+                </TouchableOpacity>
                 
-                <TouchableOpacity style={{marginTop: 24}} onPress={toggleRegisterMode}>
+                <TouchableOpacity style={{marginTop: 20}} onPress={toggleRegisterMode}>
                   <Text style={styles.authSwitchText}>{isRegisterMode ? TXT.switchLoginText : TXT.switchRegisterText}</Text>
                 </TouchableOpacity>
               </View>
@@ -472,13 +585,138 @@ export default function AccountScreen() {
                       setIsLoading(false);
                     }}
                     javaScriptEnabled={true}
-                    domStorageEnabled={true}
-                    scalesPageToFit={false}
-                    scrollEnabled={false}
-                    mixedContentMode="always"
                   />
                 )}
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* GOOGLE SIGN-IN STANDALONE WEBVIEW MODAL FOR MOBILE APP */}
+        <Modal visible={googleModalVisible} transparent animationType="slide">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+            <View style={{ width: '100%', height: '86%', backgroundColor: isLight ? '#FFFFFF' : '#0F172A', borderRadius: 24, overflow: 'hidden', borderWidth: 0.8, borderColor: COLORS.border }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 0.8, borderBottomColor: COLORS.border }}>
+                <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: '800' }}>
+                  {TXT.langName === 'English' ? 'Google Sign-In' : 'Đăng nhập bằng Google'}
+                </Text>
+                <TouchableOpacity onPress={() => setGoogleModalVisible(false)} style={{ padding: 6 }}>
+                  <X color={COLORS.textMuted} size={22} />
+                </TouchableOpacity>
+              </View>
+              <WebView
+                originWhitelist={['*']}
+                source={{
+                  html: `
+                  <!DOCTYPE html>
+                  <html>
+                  <head>
+                      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                      <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+                      <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+                      <style>
+                        body {
+                          margin: 0;
+                          padding: 0;
+                          display: flex;
+                          flex-direction: column;
+                          justify-content: center;
+                          align-items: center;
+                          height: 100vh;
+                          background-color: ${isLight ? '#FFFFFF' : '#0F172A'};
+                          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                          color: ${isLight ? '#111' : '#FFF'};
+                        }
+                        .btn-google {
+                          display: flex;
+                          align-items: center;
+                          justify-content: center;
+                          gap: 12px;
+                          background-color: ${isLight ? '#F4F4F6' : 'rgba(255,255,255,0.08)'};
+                          color: ${isLight ? '#111' : '#FFF'};
+                          border: 1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.15)'};
+                          padding: 14px 24px;
+                          border-radius: 16px;
+                          font-size: 15px;
+                          font-weight: 700;
+                          cursor: pointer;
+                          width: 80%;
+                          max-width: 300px;
+                        }
+                        .status-msg {
+                          margin-top: 15px;
+                          font-size: 13px;
+                          color: #888;
+                        }
+                      </style>
+                  </head>
+                  <body>
+                      <div id="btnContainer">
+                        <button class="btn-google" onclick="startGoogleAuth()">
+                          <svg width="20" height="20" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.62z"/>
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                          </svg>
+                          Bấm để kết nối Google
+                        </button>
+                      </div>
+                      <p class="status-msg" id="statusText">Đang khởi tạo xác thực Google...</p>
+
+                      <script>
+                        const firebaseConfig = {
+                          apiKey: "AIzaSyBJ9UhdejvlE-cOBdeOIHCIl8pgSbUTwgs",
+                          authDomain: "ipaviet-st.firebaseapp.com",
+                          projectId: "ipaviet-st",
+                          storageBucket: "ipaviet-st.firebasestorage.app",
+                          messagingSenderId: "127619650916",
+                          appId: "1:127619650916:web:fc8904c99804eeb7539671"
+                        };
+                        firebase.initializeApp(firebaseConfig);
+                        const auth = firebase.auth();
+
+                        async function startGoogleAuth() {
+                          const status = document.getElementById('statusText');
+                          status.innerText = "Đang mở cửa sổ Google Auth...";
+                          const provider = new firebase.auth.GoogleAuthProvider();
+                          try {
+                            const res = await auth.signInWithPopup(provider);
+                            if (res && res.user && window.ReactNativeWebView) {
+                              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'google_success', uid: res.user.uid }));
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+                              auth.signInWithRedirect(provider);
+                            } else {
+                              let msg = err.message || err;
+                              if (err.code === 'auth/unauthorized-domain') {
+                                msg = "Tên miền chưa được ủy quyền trong Firebase Console. Vui lòng thêm localhost/domain vào Authorized Domains.";
+                              } else if (err.code === 'auth/operation-not-allowed') {
+                                msg = "Google Sign-In chưa được bật trong Firebase Auth Console. Vui lòng bật Google Provider.";
+                              }
+                              status.innerText = "Lỗi: " + msg;
+                            }
+                          }
+                        }
+                        setTimeout(startGoogleAuth, 400);
+                      </script>
+                  </body>
+                  `,
+                  baseUrl: 'http://localhost'
+                }}
+                style={{ flex: 1, backgroundColor: 'transparent' }}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                thirdPartyCookiesEnabled={true}
+                sharedCookiesEnabled={true}
+                userAgent={
+                  Platform.OS === 'android'
+                    ? 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
+                    : 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+                }
+              />
             </View>
           </View>
         </Modal>
@@ -956,17 +1194,33 @@ function getStyles(theme: typeof COLORS, isLight: boolean) {
     
     // Auth screens
     authContainer: { flex: 1, justifyContent: 'center', padding: 16 },
-    authBox: { borderRadius: SIZES.radiusSquircle, borderWidth: 0.8, borderColor: theme.border, overflow: 'hidden', backgroundColor: theme.surfaceCard },
+    authBox: { borderRadius: SIZES.radiusSquircle, borderWidth: 0.8, borderColor: isLight ? 'rgba(0,0,0,0.08)' : theme.border, overflow: 'hidden', backgroundColor: isLight ? '#FFFFFF' : theme.surfaceCard },
     authBoxInside: { padding: 30, alignItems: 'center' },
-    authLogo: { width: 80, height: 80, borderRadius: 24, backgroundColor: 'rgba(14, 14, 16, 0.05)', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+    authLogo: { width: 80, height: 80, borderRadius: 24, backgroundColor: isLight ? 'rgba(0, 82, 255, 0.08)' : 'rgba(255, 255, 255, 0.06)', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
     authTitle: { color: theme.text, fontSize: 28, fontWeight: '800', marginBottom: 6, letterSpacing: -0.5 },
     authSub: { color: theme.textMuted, fontSize: 14, marginBottom: 25 },
-    inputWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)', borderRadius: SIZES.radiusButton, height: 54, marginBottom: 15, paddingHorizontal: 15, borderWidth: 0.8, borderColor: theme.border },
+    inputWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: isLight ? '#F4F4F6' : 'rgba(255,255,255,0.05)', borderRadius: SIZES.radiusButton, height: 54, marginBottom: 15, paddingHorizontal: 15, borderWidth: 0.8, borderColor: isLight ? 'rgba(0,0,0,0.08)' : theme.border },
     inputIcon: { marginRight: 10 },
     input: { flex: 1, color: theme.text, fontSize: 16, height: '100%' },
     authBtn: { width: '100%', height: 54, borderRadius: SIZES.radiusButton, overflow: 'hidden', marginTop: 10 },
     authBtnGradient: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
     authBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+    authDividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 18, width: '100%' },
+    authDividerLine: { flex: 1, height: 0.8, backgroundColor: isLight ? 'rgba(0,0,0,0.1)' : theme.border },
+    authDividerText: { color: theme.textMuted, fontSize: 12, fontWeight: '700', marginHorizontal: 12, letterSpacing: 1 },
+    googleBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '100%',
+      height: 52,
+      borderRadius: SIZES.radiusButton,
+      backgroundColor: isLight ? '#F4F4F6' : 'rgba(255, 255, 255, 0.08)',
+      borderWidth: 0.8,
+      borderColor: isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.18)',
+    },
+    googleIconBox: { marginRight: 10 },
+    googleBtnText: { color: theme.text, fontSize: 15, fontWeight: '700' },
     authSwitchText: { color: theme.primary, fontSize: 14, fontWeight: '600' },
     
     modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },

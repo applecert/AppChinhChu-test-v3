@@ -29,45 +29,34 @@ const SmartVIPCard = memo(({ item, index }: { item: AppItem; index: number }) =>
   useThemeUpdate();
   const router = useRouter();
   const [icon, setIcon] = useState(item.iconUrl);
-  const slideAnim   = useRef(new Animated.Value(28)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim   = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    entranceAnim(slideAnim, opacityAnim, index * 55).start();
+    Animated.timing(opacityAnim, {
+      toValue: 1,
+      duration: 250,
+      delay: index * 30,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
-  useEffect(() => {
-    if (icon.includes('ui-avatars')) {
-      let searchName = item.name.toLowerCase().replace(/(plus|\+|deluxe|lrd|pro|premium|cheat|hack|crack|ipaviet site)/ig, '').trim();
-      if (searchName.includes('yt')) searchName = 'youtube';
-      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchName)}&entity=software&limit=1&country=vn`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.results?.length > 0) {
-            setIcon(data.results[0].artworkUrl512);
-            item.iconUrl = data.results[0].artworkUrl512;
-          }
-        }).catch(() => {});
-    }
-  }, []);
-
-  const pressIn  = () => Animated.spring(scaleAnim, { toValue: 0.93, ...SPRINGS.tap }).start();
-  const pressOut = () => Animated.spring(scaleAnim, { toValue: 1,    ...SPRINGS.tap }).start();
+  const pressIn  = () => Animated.timing(scaleAnim, { toValue: 0.95, duration: 100, useNativeDriver: true }).start();
+  const pressOut = () => Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: true }).start();
 
   return (
-    <Animated.View style={[{ transform: [{ translateY: slideAnim }, { scale: scaleAnim }], opacity: opacityAnim }]}>
+    <Animated.View style={[{ transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}>
       <TouchableOpacity
-        style={[styles.vipCard, { backgroundColor: COLORS.surfaceCard, borderColor: COLORS.border }]}
+        style={styles.vipCard}
         onPress={() => router.push(`/details/${item.id}`)}
         onPressIn={pressIn}
         onPressOut={pressOut}
-        activeOpacity={1}
+        activeOpacity={0.88}
       >
         <View style={styles.vipIconWrapper}>
           <Image source={{ uri: icon }} style={styles.vipIcon} />
           <LinearGradient
-            colors={COLORS.goldGradient}
+            colors={['#00F0FF', '#8B5CF6']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.vipBadge}
@@ -75,8 +64,8 @@ const SmartVIPCard = memo(({ item, index }: { item: AppItem; index: number }) =>
             <Text style={styles.vipBadgeText}>VIP</Text>
           </LinearGradient>
         </View>
-        <Text style={[styles.vipName, { color: COLORS.text }]} numberOfLines={2}>{item.name}</Text>
-        <Text style={[styles.vipSub, { color: COLORS.textMuted }]} numberOfLines={1}>{item.category}</Text>
+        <Text style={styles.vipName} numberOfLines={2}>{item.name}</Text>
+        <Text style={styles.vipSub} numberOfLines={1}>{item.category || 'VIP App'}</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -411,8 +400,8 @@ export default function HomeScreen() {
         <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        scrollEventThrottle={16}
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+        scrollEventThrottle={1}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
       >
         <Animated.View style={[styles.header, { opacity: headerOpacity }]}>
           <Text style={[styles.dateLabel, { color: COLORS.textMuted }]}>{today.toUpperCase()}</Text>

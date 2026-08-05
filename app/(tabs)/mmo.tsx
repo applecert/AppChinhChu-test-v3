@@ -501,11 +501,15 @@ export default function MMOMarketplaceScreen() {
         const orderId = `MMO${user.uid.substring(0, 4).toUpperCase()}${Date.now().toString().slice(-4)}`;
         setRechargeOrderId(orderId);
 
-        unsubUser = onSnapshot(doc(db, 'users', user.uid), (snap) => {
-          if (snap.exists()) {
-            setUserCoins(snap.data().coins || 0);
-          }
-        });
+        unsubUser = onSnapshot(
+          doc(db, 'users', user.uid),
+          (snap) => {
+            if (snap.exists()) {
+              setUserCoins(snap.data().coins || 0);
+            }
+          },
+          (err) => console.warn('[MMO Snapshot Warning]:', err?.message || err)
+        );
       } else {
         setUserCoins(0);
         // Tải sản phẩm khi không đăng nhập
@@ -1178,8 +1182,6 @@ export default function MMOMarketplaceScreen() {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.productList}
                 showsVerticalScrollIndicator={false}
-                onScroll={handleScroll}
-                scrollEventThrottle={16}
                 renderItem={({ item }) => (
                   <ProductRowItem 
                     item={item}

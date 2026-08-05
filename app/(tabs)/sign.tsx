@@ -259,12 +259,12 @@ export default function SignScreen() {
     if (value < 0) return;
     const diff = value - lastScrollY.current;
     
-    if (diff > 15 && value > 100) {
+    if (diff > 35 && value > 100) {
       if (!isTabBarHidden.current) {
         isTabBarHidden.current = true;
         DeviceEventEmitter.emit('hideTabBar');
       }
-    } else if (diff < -15 || value < 20) {
+    } else if (diff < -35 || value < 20) {
       if (isTabBarHidden.current) {
         isTabBarHidden.current = false;
         DeviceEventEmitter.emit('showTabBar');
@@ -873,8 +873,7 @@ export default function SignScreen() {
             keyExtractor={(item) => item.uri} 
             renderItem={renderItem} 
             contentContainerStyle={styles.listContent} 
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
           /> 
       )}
 

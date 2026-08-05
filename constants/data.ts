@@ -24,6 +24,46 @@ const fixImageUrl = (url: string) => {
 
 const chunkArray = (arr: any[], size: number) => Array.from({ length: Math.ceil(arr.length / size) }, (v, i) => arr.slice(i * size, i * size + size));
 
+export const determineCategory = (appName: string, apiCategory: string = ''): string => {
+  const n = (appName || '').toLowerCase();
+  const c = (apiCategory || '').toLowerCase();
+
+  // 1. Games (Complete game title and genre matching)
+  if (
+    c.includes('game') || c.includes('trò chơi') ||
+    /8ball|sudoku|farmville|braintest|brainout|blockblast|wordscapes|zombie|hillclimb|bloons|brickout|papas|escape|apocalypse|dicedreams|stickwar|busescape|zencolor|hunterassassin|dblegends|goingballs|offlinegames|bluey|township|coinmaster|shinobi|crossyroad|magicsort|jetpack|squaredude|parkingjam|2player|minecraft|madfut|traveltown|summonerswar|kitaria|battlecats|gardenscapes|homescapes|royalmatch|demonic|dragoncity|hotwheels|masketeers|furryevo|dungeon|antcolony|rogueslime|boardbattle|roblox|pubg|gta|pokemon|asphalt|fifa|pes|clash|genshin|honkai|pvz|subway|candycrush|freefire|lienquan|aov|tocchien|bansung|duaxe|volam|tamquoc|moba|fps|rpg|shadowfight/i.test(n)
+  ) {
+    return 'Trò Chơi';
+  }
+
+  // 2. Social Networking
+  if (
+    c.includes('social') || c.includes('mạng xã hội') ||
+    /facebook|tiktok|instagram|insta|zalo|messenger|telegram|whatsapp|twitter|threads|reddit|snapchat|badoo/i.test(n)
+  ) {
+    return 'Mạng Xã Hội';
+  }
+
+  // 3. Media & Entertainment
+  if (
+    c.includes('entertainment') || c.includes('music') || c.includes('video') || c.includes('giải trí') ||
+    /spotify|youtube|netflix|soundcloud|mp3|phim|nhạc|stream|cinema|tv|vtv|zing|flacbox|tunein|audiomack|webyid|videoleap|vlognow|inshot|film|movie/i.test(n)
+  ) {
+    return 'Giải Trí';
+  }
+
+  // 4. Photo, Video & Creative Edit
+  if (
+    c.includes('photo') || c.includes('camera') || c.includes('graphics') || c.includes('nhiếp ảnh') || c.includes('sáng tạo') ||
+    /capcut|picsart|lightroom|photoshop|vsco|snapseed|editor|camera|canva|procreate|illustrator|facetune|dazz|remini|photoroom|darkroom|motionleap|airbrush|toon/i.test(n)
+  ) {
+    return 'Sáng Tạo';
+  }
+
+  // 5. Default Utility
+  return 'Tiện Ích';
+};
+
 // ==========================================
 // 1. KHO THƯỜNG (AppTesters)
 // ==========================================
@@ -36,14 +76,7 @@ export const fetchRegularApps = async (): Promise<AppItem[]> => {
     const apps = data.apps || [];
 
     const finalApps = apps.map((a: any, index: number) => {
-      let cat = 'Khác';
-      const nameLower = a.name.toLowerCase();
-      if (a.category) cat = a.category;
-      else if (nameLower.includes('spotify') || nameLower.includes('youtube') || nameLower.includes('tiktok') || nameLower.includes('music') || nameLower.includes('video')) cat = 'Giải Trí';
-      else if (nameLower.includes('facebook') || nameLower.includes('zalo') || nameLower.includes('messenger') || nameLower.includes('insta')) cat = 'Mạng Xã Hội';
-      else if (nameLower.includes('game') || nameLower.includes('hack') || nameLower.includes('cheat') || nameLower.includes('pubg')) cat = 'Trò Chơi';
-      else if (nameLower.includes('capcut') || nameLower.includes('picsart') || nameLower.includes('lightroom')) cat = 'Nhiếp Ảnh';
-      else cat = 'Tiện Ích';
+      const cat = determineCategory(a.name, a.category);
 
       const rawIcon = a.iconURL || '';
       const rawScreenshots = a.screenshotURLs || a.screenshotUrls || [];
@@ -107,14 +140,7 @@ export const fetchVIPApps = async (): Promise<AppItem[]> => {
 
     const finalApps = assets.map((asset: any, index: number) => {
       const { displayName, searchName } = cleanAppName(asset.name);
-      
-      let cat = 'Khác';
-      const nameLower = displayName.toLowerCase();
-      if (nameLower.includes('spotify') || nameLower.includes('youtube') || nameLower.includes('tiktok') || nameLower.includes('music') || nameLower.includes('video')) cat = 'Giải Trí';
-      else if (nameLower.includes('facebook') || nameLower.includes('zalo') || nameLower.includes('messenger') || nameLower.includes('insta')) cat = 'Mạng Xã Hội';
-      else if (nameLower.includes('game') || nameLower.includes('hack') || nameLower.includes('cheat') || nameLower.includes('pubg') || nameLower.includes('lien quan') || nameLower.includes('aov')) cat = 'Trò Chơi';
-      else if (nameLower.includes('capcut') || nameLower.includes('picsart') || nameLower.includes('lightroom')) cat = 'Nhiếp Ảnh';
-      else cat = 'Tiện Ích';
+      const cat = determineCategory(displayName);
 
       return {
         id: 'vip_' + asset.id.toString() + '_' + index,
