@@ -7,25 +7,35 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
   Dimensions,
+  Platform,
   StatusBar as RNStatusBar,
   Alert,
-  Easing,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withRepeat,
+  withSequence,
+  withDelay,
+  interpolate,
+  Extrapolation,
+  Easing,
+  runOnJS,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import {
   ArrowLeft,
-  Bot,
   Send,
   Sparkles,
-  RotateCcw,
   Crown,
   Wallet,
   Wrench,
@@ -37,370 +47,744 @@ import {
   Download,
   Flame,
   Zap,
-  Star,
   ChevronRight,
+  Star,
+  RotateCcw,
+  Bot,
 } from 'lucide-react-native';
 import { auth, db } from '../firebaseConfig';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { COLORS, useThemeUpdate, TXT } from '../constants/theme';
 import { fetchRegularApps, fetchVIPApps, AppItem } from '../constants/data';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const BANK_ID = 'ACB';
-const ACCOUNT_NO = '22703611';
-const ACCOUNT_NAME = 'TRAN NGUYEN MINH QUI';
+
+/* ═══════════════════════════════════════════════════════════════
+   SPATIAL DESIGN SYSTEM — iOS 26 Living Intelligence
+   ═══════════════════════════════════════════════════════════════ */
+
+const S = {
+  void: '#000000',
+  depth1: '#020205',
+  depth2: '#05050A',
+  depth3: '#080810',
+  depth4: '#0C0C18',
+
+  cyan: '#00E5FF',
+  cyanSoft: 'rgba(0,229,255,0.15)',
+  cyanGlow: 'rgba(0,229,255,0.4)',
+  violet: '#A78BFA',
+  violetSoft: 'rgba(167,139,250,0.12)',
+  rose: '#FB7185',
+  amber: '#FBBF24',
+  emerald: '#34D399',
+
+  text: '#FFFFFF',
+  textPrimary: 'rgba(255,255,255,0.95)',
+  textSecondary: 'rgba(255,255,255,0.55)',
+  textTertiary: 'rgba(255,255,255,0.30)',
+  textQuaternary: 'rgba(255,255,255,0.12)',
+
+  glass: {
+    bg: 'rgba(255,255,255,0.04)',
+    bgStrong: 'rgba(255,255,255,0.08)',
+    border: 'rgba(255,255,255,0.08)',
+    borderStrong: 'rgba(255,255,255,0.16)',
+    highlight: 'rgba(255,255,255,0.12)',
+  },
+
+  radius: { xs: 8, sm: 14, md: 20, lg: 28, xl: 36, full: 999 },
+
+  springBouncy: { damping: 12, stiffness: 200, mass: 0.8 },
+  springSoft: { damping: 20, stiffness: 120, mass: 1.2 },
+  timingFast: { duration: 250, easing: Easing.out(Easing.quad) },
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   TYPES
+   ═══════════════════════════════════════════════════════════════ */
+
+type IntentType = 'vip' | 'sign' | 'recharge' | 'search' | 'crash' | 'mmo' | 'support' | 'navigate' | 'greeting';
 
 interface CommandAction {
   label: string;
   route?: string;
   actionType?: string;
   payload?: any;
-  style: 'primary' | 'yellow' | 'danger';
+  style: 'primary' | 'secondary' | 'ghost';
 }
 
-interface Message {
+interface IntelligenceMessage {
   id: string;
-  sender: 'user' | 'bot';
+  sender: 'user' | 'intelligence';
   text: string;
   timestamp: string;
   actions?: CommandAction[];
   appCards?: AppItem[];
+  intent?: IntentType;
+  isProcessing?: boolean;
 }
 
-function removeAccents(str: string) {
-  return str
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .toLowerCase();
+interface UserState {
+  user: any;
+  coins: number;
+  vipStatus: string;
+  isVIP: boolean;
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   SUB-COMPONENTS
+   HOOKS
    ═══════════════════════════════════════════════════════════════ */
 
-// Animated Typing Indicator
-const TypingIndicator = memo(({ isLight }: { isLight: boolean }) => {
-  const dots = [
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-  ];
+const useUserState = () => {
+  const [state, setState] = useState<UserState>({
+    user: null,
+    coins: 0,
+    vipStatus: 'Chưa đăng nhập',
+    isVIP: false,
+  });
 
   useEffect(() => {
-    const animations = dots.map((dot, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(i * 150),
-          Animated.timing(dot, {
-            toValue: 1,
-            duration: 400,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(dot, {
-            toValue: 0,
-            duration: 400,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ])
-      )
-    );
-    animations.forEach((a) => a.start());
-    return () => animations.forEach((a) => a.stop());
+    let unsubDoc: any;
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
+      if (u) {
+        unsubDoc = onSnapshot(doc(db, 'users', u.uid), (snap) => {
+          if (snap.exists()) {
+            const d = snap.data();
+            const coins = d.coins || 0;
+            const exp = d.vipExpire;
+            let vipText = 'Chưa đăng ký';
+            let isV = false;
+            if (exp) {
+              const ms = exp.toMillis ? exp.toMillis() : exp.seconds ? exp.seconds * 1000 : Number(exp) || 0;
+              if (ms > Date.now()) {
+                vipText = new Date(ms).toLocaleDateString('vi-VN');
+                isV = true;
+              } else {
+                vipText = 'Hết hạn';
+              }
+            }
+            setState({ user: u, coins, vipStatus: vipText, isVIP: isV });
+          }
+        });
+      } else {
+        setState({ user: null, coins: 0, vipStatus: 'Chưa đăng nhập', isVIP: false });
+      }
+    });
+    return () => {
+      unsubAuth();
+      if (unsubDoc) unsubDoc();
+    };
   }, []);
 
-  const dotColor = isLight ? '#0052FF' : '#00F0FF';
+  return state;
+};
+
+const useHaptic = () => {
+  const trigger = useCallback((type: 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error') => {
+    try {
+      switch (type) {
+        case 'light': Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); break;
+        case 'medium': Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); break;
+        case 'heavy': Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); break;
+        case 'success': Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); break;
+        case 'warning': Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); break;
+        case 'error': Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); break;
+      }
+    } catch {}
+  }, []);
+  return trigger;
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   LIVING BACKGROUND — Spatial Ambient
+   ═══════════════════════════════════════════════════════════════ */
+
+const LivingBackground = memo(() => {
+  const time = useSharedValue(0);
+
+  useEffect(() => {
+    time.value = withRepeat(
+      withTiming(1, { duration: 20000, easing: Easing.linear }),
+      -1,
+      false
+    );
+    return () => { cancelAnimation(time); };
+  }, []);
+
+  const aurora1Style = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: interpolate(time.value, [0, 1], [-30, 30]) },
+      { translateY: interpolate(time.value, [0, 1], [-20, 20]) },
+      { scale: interpolate(time.value, [0, 0.5, 1], [1, 1.1, 1]) },
+    ],
+    opacity: 0.6,
+  }));
+
+  const aurora2Style = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: interpolate(time.value, [0, 1], [20, -40]) },
+      { translateY: interpolate(time.value, [0, 1], [30, -10]) },
+      { scale: interpolate(time.value, [0, 0.5, 1], [1.1, 1, 1.1]) },
+    ],
+    opacity: 0.5,
+  }));
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      {dots.map((dot, i) => (
-        <Animated.View
-          key={i}
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: 3.5,
-            backgroundColor: dotColor,
-            opacity: Animated.add(0.4, Animated.multiply(dot, 0.6)),
-            transform: [
-              {
-                translateY: Animated.multiply(dot, -6),
-              },
-            ],
-          }}
-        />
-      ))}
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: S.void }]} />
+
+      <LinearGradient
+        colors={[S.depth1, S.depth2, S.depth3]}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          aurora1Style,
+          { justifyContent: 'flex-start', alignItems: 'flex-start' },
+        ]}
+      >
+        <View style={{
+          width: 500,
+          height: 500,
+          borderRadius: 250,
+          backgroundColor: 'rgba(139,92,246,0.09)',
+          top: -100,
+          left: -150,
+        }} />
+      </Animated.View>
+
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          aurora2Style,
+          { justifyContent: 'flex-end', alignItems: 'flex-end' },
+        ]}
+      >
+        <View style={{
+          width: 450,
+          height: 450,
+          borderRadius: 225,
+          backgroundColor: 'rgba(0,229,255,0.07)',
+          bottom: -80,
+          right: -80,
+        }} />
+      </Animated.View>
     </View>
   );
 });
 
-// Markdown-like Text Renderer
-const MarkdownText = memo(({ text, color, isLight }: { text: string; color: string; isLight: boolean }) => {
-  const parts = text.split(/(\*\*.*?\*\*)/g);
+/* ═══════════════════════════════════════════════════════════════
+   ENERGY ORB — Living AI Entity
+   ═══════════════════════════════════════════════════════════════ */
+
+const ORB_SIZE = 120;
+
+interface EnergyOrbProps {
+  state: 'idle' | 'listening' | 'thinking' | 'speaking';
+}
+
+const EnergyOrb = memo(({ state }: EnergyOrbProps) => {
+  const breath = useSharedValue(1);
+
+  useEffect(() => {
+    if (state === 'idle') {
+      breath.value = withRepeat(
+        withSequence(
+          withTiming(1.08, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
+          withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        true
+      );
+    } else if (state === 'thinking') {
+      breath.value = withRepeat(
+        withSequence(
+          withTiming(0.9, { duration: 600, easing: Easing.inOut(Easing.cubic) }),
+          withTiming(1.15, { duration: 600, easing: Easing.inOut(Easing.cubic) }),
+        ),
+        -1,
+        true
+      );
+    }
+
+    return () => { cancelAnimation(breath); };
+  }, [state]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: breath.value }],
+  }));
 
   return (
-    <Text style={{ color, fontSize: 14, lineHeight: 22, fontWeight: '500' }}>
-      {parts.map((part, i) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return (
-            <Text key={i} style={{ fontWeight: '900', color }}>
-              {part.slice(2, -2)}
-            </Text>
-          );
-        }
-        if (part.includes('•')) {
-          const bulletParts = part.split(/(•[^\n]*)/g);
-          return (
-            <Text key={i}>
-              {bulletParts.map((bp, j) => {
-                if (bp.startsWith('•')) {
-                  return (
-                    <Text key={j}>
-                      <Text style={{ color: isLight ? '#0052FF' : '#00F0FF', fontWeight: '900' }}>• </Text>
-                      <Text style={{ color, fontWeight: '500' }}>{bp.slice(1).trim()}</Text>
-                    </Text>
-                  );
-                }
-                return <Text key={j} style={{ color }}>{bp}</Text>;
-              })}
-            </Text>
-          );
-        }
-        return <Text key={i} style={{ color }}>{part}</Text>;
-      })}
-    </Text>
+    <View style={{ width: ORB_SIZE, height: ORB_SIZE, alignSelf: 'center', justifyContent: 'center', alignItems: 'center' }}>
+      <Animated.View style={[styles.orbGlowLayer, animatedStyle]}>
+        <LinearGradient
+          colors={['rgba(0,229,255,0.35)', 'rgba(167,139,250,0.25)', 'transparent']}
+          style={styles.orbGlowCircle}
+        />
+      </Animated.View>
+
+      <Animated.View style={[styles.orbCoreBox, animatedStyle]}>
+        <LinearGradient
+          colors={['#00E5FF', '#8B5CF6']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.orbCoreGradient}
+        />
+        <Bot size={42} color="#FFFFFF" strokeWidth={2.2} />
+      </Animated.View>
+    </View>
   );
 });
 
-// Message Bubble Component
-const MessageBubble = memo(({ msg, isLight, styles, onActionPress, onAppPress }: any) => {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+/* ═══════════════════════════════════════════════════════════════
+   LIQUID INPUT — Floating Glass Bar
+   ═══════════════════════════════════════════════════════════════ */
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 350, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-    ]).start();
-  }, []);
+interface LiquidInputProps {
+  value: string;
+  onChangeText: (t: string) => void;
+  onSubmit: () => void;
+  orbState?: string;
+  onFocusChange: (focused: boolean) => void;
+}
 
-  const isUser = msg.sender === 'user';
-  const textColor = isUser ? (isLight ? '#FFFFFF' : '#03040A') : (isLight ? '#1A1A2E' : '#E2E8F0');
-  const timeColor = isUser
-    ? (isLight ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)')
-    : (isLight ? '#94A3B8' : '#64748B');
+const LiquidInput = memo(({ value, onChangeText, onSubmit, onFocusChange }: LiquidInputProps) => {
+  const focused = useSharedValue(0);
+  const scale = useSharedValue(1);
+  const haptic = useHaptic();
 
-  return (
-    <Animated.View
-      style={[
-        styles.msgRow,
-        { justifyContent: isUser ? 'flex-end' : 'flex-start' },
-        { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-      ]}
-    >
-      {!isUser && (
-        <View style={styles.msgAvatarBox}>
-          <Bot size={14} color="#00F0FF" />
-        </View>
-      )}
+  const animatedStyle = useAnimatedStyle(() => ({
+    borderColor: focused.value === 1 ? 'rgba(0,229,255,0.4)' : 'rgba(255,255,255,0.08)',
+    transform: [{ scale: scale.value }],
+  }));
 
-      <View style={[styles.msgBubble, isUser ? styles.userBubble : styles.botBubble]}>
-        <MarkdownText text={msg.text} color={textColor} isLight={isLight} />
+  const handleFocus = () => {
+    focused.value = withTiming(1, S.timingFast);
+    onFocusChange(true);
+    haptic('light');
+  };
 
-        {/* App Cards inside AI response */}
-        {msg.appCards && msg.appCards.length > 0 && (
-          <View style={{ marginTop: 12, gap: 10 }}>
-            {msg.appCards.map((appItem: AppItem) => (
-              <TouchableOpacity
-                key={appItem.id}
-                style={styles.aiAppCard}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                  onAppPress(appItem.id);
-                }}
-                activeOpacity={0.85}
-              >
-                <Image source={{ uri: appItem.iconUrl }} style={styles.aiAppIcon} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.aiAppName} numberOfLines={1}>
-                    {appItem.name}
-                  </Text>
-                  <Text style={styles.aiAppCat} numberOfLines={1}>
-                    {appItem.category || 'IPA App'}
-                  </Text>
-                </View>
-                <LinearGradient
-                  colors={isLight ? ['#0052FF', '#3B82F6'] : ['#00F0FF', '#0EA5E9']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.aiAppBtn, { borderRadius: 18 }]}
-                >
-                  <Download size={12} color={isLight ? '#FFF' : '#03040A'} />
-                  <Text style={{ color: isLight ? '#FFF' : '#03040A', fontSize: 11, fontWeight: '900' }}>TẢI VỀ</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+  const handleBlur = () => {
+    focused.value = withTiming(0, S.timingFast);
+    onFocusChange(false);
+  };
 
-        {/* Command Action Chips */}
-        {msg.actions && msg.actions.length > 0 && (
-          <View style={styles.actionChipRow}>
-            {msg.actions.map((act: CommandAction, i: number) => (
-              <TouchableOpacity
-                key={i}
-                style={[
-                  styles.actionChip,
-                  act.style === 'primary' && styles.actionChipPrimary,
-                  act.style === 'yellow' && styles.actionChipYellow,
-                  act.style === 'danger' && styles.actionChipDanger,
-                ]}
-                onPress={() => onActionPress(act)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.actionChipText, { color: act.style === 'primary' ? (isLight ? '#FFFFFF' : '#03040A') : '#FFFFFF' }]}>
-                  {act.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        <Text style={[styles.msgTime, { color: timeColor }]}>{msg.timestamp}</Text>
-      </View>
-    </Animated.View>
-  );
-});
-
-// Suggestion Pill Component
-const SuggestionPill = memo(({ item, index, onPress, styles }: any) => {
-  const anim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: 450,
-      delay: index * 60,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, []);
+  const handleSubmit = () => {
+    if (!value.trim()) return;
+    scale.value = withSequence(
+      withTiming(0.98, { duration: 80 }),
+      withSpring(1, S.springBouncy),
+    );
+    haptic('medium');
+    onSubmit();
+  };
 
   return (
-    <Animated.View
-      style={{
-        opacity: anim,
-        transform: [{ scale: Animated.add(0.85, Animated.multiply(anim, 0.15)) }],
-      }}
-    >
+    <Animated.View style={[styles.liquidInputContainer, animatedStyle]}>
+      <BlurView intensity={60} tint="dark" style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)', 'transparent']}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      <TextInput
+        style={styles.liquidInput}
+        placeholder="Nói với Intelligence..."
+        placeholderTextColor={S.textTertiary}
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onSubmitEditing={handleSubmit}
+        returnKeyType="send"
+        selectionColor={S.cyan}
+        multiline={false}
+      />
       <TouchableOpacity
-        style={styles.suggestionPill}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-          onPress(item.query);
-        }}
-        activeOpacity={0.8}
+        activeOpacity={0.7}
+        onPress={handleSubmit}
+        disabled={!value.trim()}
+        style={[
+          styles.sendCapsule,
+          { opacity: value.trim() ? 1 : 0.4 },
+        ]}
       >
-        {item.icon}
-        <Text style={styles.suggestionPillText}>{item.label}</Text>
+        <LinearGradient
+          colors={value.trim() ? [S.cyan, S.violet] : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <Send size={14} color={value.trim() ? S.void : S.textTertiary} strokeWidth={2.5} />
       </TouchableOpacity>
     </Animated.View>
   );
 });
 
 /* ═══════════════════════════════════════════════════════════════
-   MAIN SCREEN
+   INTELLIGENCE TEXT & SPATIAL CARD
    ═══════════════════════════════════════════════════════════════ */
-export default function AiSupportScreen() {
-  useThemeUpdate();
-  const router = useRouter();
-  const isLight = COLORS.background === '#F4F4F6';
-  const styles = getStyles(COLORS, isLight);
 
-  const [user, setUser] = useState<any>(null);
-  const [userCoins, setUserCoins] = useState<number>(0);
-  const [vipExpire, setVipExpire] = useState<string>('Đang kiểm tra...');
-  const [messages, setMessages] = useState<Message[]>([]);
+const WordToken = memo(({ word, index, total, progress }: any) => {
+  const style = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      progress.value,
+      [index / total, (index + 1) / total],
+      [0, 1],
+      Extrapolation.CLAMP
+    ),
+    transform: [{
+      translateY: interpolate(
+        progress.value,
+        [index / total, (index + 1) / total],
+        [8, 0],
+        Extrapolation.CLAMP
+      ),
+    }],
+  }));
+
+  return (
+    <Animated.Text style={[styles.wordToken, style]}>
+      {word}{' '}
+    </Animated.Text>
+  );
+});
+
+const IntelligenceText = memo(({ text, onComplete }: { text: string; onComplete?: () => void }) => {
+  const progress = useSharedValue(0);
+  const words = text.split(' ');
+
+  useEffect(() => {
+    progress.value = withTiming(1, { duration: Math.min(1200, words.length * 40), easing: Easing.out(Easing.quad) }, (finished) => {
+      if (finished && onComplete) runOnJS(onComplete)();
+    });
+    return () => { cancelAnimation(progress); };
+  }, [text]);
+
+  return (
+    <Text style={styles.intelligenceText}>
+      {words.map((word, i) => (
+        <WordToken key={`${i}-${word}`} word={word} index={i} total={words.length} progress={progress} />
+      ))}
+    </Text>
+  );
+});
+
+const SpatialAppCard = memo(({ app, onPress, index }: { app: AppItem; onPress: () => void; index: number }) => {
+  const entry = useSharedValue(0);
+  const press = useSharedValue(1);
+  const haptic = useHaptic();
+
+  useEffect(() => {
+    entry.value = withDelay(index * 80, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
+  }, []);
+
+  const entryStyle = useAnimatedStyle(() => ({
+    opacity: entry.value,
+    transform: [
+      { translateY: interpolate(entry.value, [0, 1], [20, 0]) },
+      { scale: press.value },
+    ],
+  }));
+
+  const handlePressIn = () => {
+    press.value = withTiming(0.96, { duration: 100 });
+    haptic('light');
+  };
+
+  const handlePressOut = () => {
+    press.value = withSpring(1, S.springBouncy);
+  };
+
+  return (
+    <Animated.View style={[styles.spatialCardWrap, entryStyle]}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+      >
+        <View style={styles.spatialCard}>
+          <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+          <LinearGradient
+            colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)']}
+            style={StyleSheet.absoluteFill}
+          />
+
+          <View style={styles.cardTop}>
+            <Image source={{ uri: app.iconUrl }} style={styles.cardIcon} />
+            <View style={styles.cardMeta}>
+              <Text style={styles.cardName} numberOfLines={1}>{app.name}</Text>
+              <Text style={styles.cardCategory} numberOfLines={1}>{app.category || 'IPA'}</Text>
+              <View style={styles.cardRating}>
+                <Star size={10} color={S.amber} fill={S.amber} />
+                <Text style={styles.cardRatingText}>{app.rating || '4.8'}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.cardBadgeRow}>
+            <View style={[styles.cardBadge, { backgroundColor: 'rgba(52,211,153,0.15)' }]}>
+              <ShieldCheck size={10} color={S.emerald} />
+              <Text style={[styles.cardBadgeText, { color: S.emerald }]}>Verified</Text>
+            </View>
+          </View>
+
+          <View style={styles.cardAction}>
+            <TouchableOpacity style={styles.cardButton} onPress={onPress} activeOpacity={0.8}>
+              <Text style={styles.cardButtonText}>Mở</Text>
+              <ChevronRight size={12} color={S.void} strokeWidth={3} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
+
+const ActionChip = memo(({ action, onPress, index }: { action: CommandAction; onPress: () => void; index: number }) => {
+  const entry = useSharedValue(0);
+  const press = useSharedValue(1);
+  const haptic = useHaptic();
+
+  useEffect(() => {
+    entry.value = withDelay(200 + index * 60, withSpring(1, S.springSoft));
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: entry.value,
+    transform: [{ scale: press.value }, { translateY: interpolate(entry.value, [0, 1], [10, 0]) }],
+  }));
+
+  const colors = {
+    primary: { bg: [S.cyan, S.violet] as const, text: S.void },
+    secondary: { bg: ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.08)'] as const, text: S.text },
+    ghost: { bg: ['transparent', 'transparent'] as const, text: S.textSecondary },
+  };
+  const c = colors[action.style] || colors.primary;
+
+  return (
+    <Animated.View style={style}>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => {
+          haptic('medium');
+          onPress();
+        }}
+        onPressIn={() => { press.value = withTiming(0.95, { duration: 80 }); }}
+        onPressOut={() => { press.value = withSpring(1, S.springBouncy); }}
+      >
+        <View style={[styles.actionChip, { borderColor: action.style === 'ghost' ? 'rgba(255,255,255,0.1)' : 'transparent' }]}>
+          <LinearGradient colors={c.bg} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
+          <Text style={[styles.actionChipText, { color: c.text }]}>{action.label}</Text>
+          {action.style === 'primary' && <Zap size={12} color={S.void} />}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
+
+const MessageEntity = memo(({ message, onAction, onAppPress }: {
+  message: IntelligenceMessage;
+  onAction: (a: CommandAction) => void;
+  onAppPress: (id: string) => void;
+}) => {
+  const entry = useSharedValue(0);
+  const isUser = message.sender === 'user';
+
+  useEffect(() => {
+    entry.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: entry.value,
+    transform: [{ translateY: interpolate(entry.value, [0, 1], [isUser ? -10 : 20, 0]) }],
+  }));
+
+  if (isUser) {
+    return (
+      <Animated.View style={[styles.userEntity, style]}>
+        <View style={styles.userEntityInner}>
+          <Text style={styles.userEntityText}>{message.text}</Text>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View style={[styles.intelligenceEntity, style]}>
+      <View style={styles.intentRow}>
+        <View style={styles.intentDot} />
+        <Text style={styles.intentLabel}>
+          {message.isProcessing ? 'Đang phân tích...' : 'Intelligence'}
+        </Text>
+        <Text style={styles.entityTime}>{message.timestamp}</Text>
+      </View>
+
+      <View style={styles.entityContent}>
+        <IntelligenceText text={message.text} />
+      </View>
+
+      {message.appCards && message.appCards.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.appCardRow}
+          decelerationRate="fast"
+        >
+          {message.appCards.map((app, i) => (
+            <SpatialAppCard
+              key={app.id}
+              app={app}
+              index={i}
+              onPress={() => onAppPress(app.id)}
+            />
+          ))}
+        </ScrollView>
+      )}
+
+      {message.actions && message.actions.length > 0 && (
+        <View style={styles.actionRow}>
+          {message.actions.map((act, i) => (
+            <ActionChip
+              key={i}
+              action={act}
+              index={i}
+              onPress={() => onAction(act)}
+            />
+          ))}
+        </View>
+      )}
+    </Animated.View>
+  );
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   COMMAND CENTER — Intent Engine
+   ═══════════════════════════════════════════════════════════════ */
+
+function removeAccents(str: string) {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+}
+
+interface ProcessResult {
+  text: string;
+  actions: CommandAction[];
+  appCards?: AppItem[];
+  intent: IntentType;
+}
+
+const processIntent = (raw: string, apps: AppItem[], userEmail?: string): ProcessResult => {
+  const t = removeAccents(raw);
+
+  if (t.includes('vip') || t.includes('gia han') || t.includes('mua goi') || t.includes('nang cap')) {
+    return {
+      text: 'Tôi đã chuẩn bị sẵn các gói VIP cho bạn. Đặc quyền bao gồm tải không giới hạn, ký app ngoại tuyến và hỗ trợ 24/7.',
+      actions: [
+        { label: 'Xem gói VIP', route: '/buy-vip', style: 'primary' },
+        { label: 'Nạp xu trước', route: '/account', style: 'secondary' },
+      ],
+      intent: 'vip',
+    };
+  }
+
+  if (t.includes('ky app') || t.includes('vsign') || t.includes('cert') || t.includes('p12') || t.includes('provision')) {
+    return {
+      text: 'Bạn có thể ký IPA trực tiếp trên thiết bị. Hãy chuẩn bị file chứng chỉ ZIP chứa P12 và MobileProvision.',
+      actions: [
+        { label: 'Mở ký app', route: '/sign', style: 'primary' },
+        { label: 'Nạp chứng chỉ', route: '/sign?importCert=true', style: 'secondary' },
+      ],
+      intent: 'sign',
+    };
+  }
+
+  if (t.includes('nap') || t.includes('tien') || t.includes('xu') || t.includes('bank') || t.includes('chuyen khoan')) {
+    return {
+      text: `Hệ thống nạp xu tự động qua ACB (STK 22703611 - TRAN NGUYEN MINH QUI). Nội dung NAP ${userEmail || 'Email'}. Xu cộng tự động sau 10-30 giây.`,
+      actions: [
+        { label: 'Đến trang nạp', route: '/account', style: 'primary' },
+      ],
+      intent: 'recharge',
+    };
+  }
+
+  if (t.includes('crash') || t.includes('loi') || t.includes('thu hoi') || t.includes('vang') || t.includes('khong mo')) {
+    return {
+      text: 'Apple đã thu hồi chứng chỉ doanh nghiệp. Gỡ app bị lỗi, ký lại bằng chứng chỉ cá nhân hoặc dùng gói VIP độc quyền chống thu hồi.',
+      actions: [
+        { label: 'Mua VIP ngay', route: '/buy-vip', style: 'primary' },
+        { label: 'Tự ký lại', route: '/sign', style: 'secondary' },
+      ],
+      intent: 'crash',
+    };
+  }
+
+  if (t.includes('tim') || t.includes('app') || t.includes('game') || t.includes('ipa') || t.includes('youtube') || t.includes('facebook') || t.includes('tiktok')) {
+    const q = raw.replace(/(tim|app|ipa|game|cho|xem|can|muon)/gi, '').trim();
+    const matched = q.length >= 2 ? apps.filter(a =>
+      removeAccents(a.name).includes(removeAccents(q)) ||
+      removeAccents(a.category || '').includes(removeAccents(q))
+    ).slice(0, 3) : [];
+
+    if (matched.length > 0) {
+      return {
+        text: `Tìm thấy ${matched.length} ứng dụng phù hợp với yêu cầu của bạn.`,
+        appCards: matched,
+        actions: [
+          { label: 'Mở Kho IPA', route: '/apps', style: 'primary' },
+          { label: 'Kho VIP', route: '/vip', style: 'secondary' },
+        ],
+        intent: 'search',
+      };
+    }
+    return {
+      text: 'Kho IPA có hàng trăm app mod/tweak sẵn. Bạn có thể tìm kiếm trực tiếp hoặc yêu cầu admin hỗ trợ nạp app mới.',
+      actions: [
+        { label: 'Khám phá Kho IPA', route: '/apps', style: 'primary' },
+        { label: 'Kho VIP', route: '/vip', style: 'secondary' },
+      ],
+      intent: 'search',
+    };
+  }
+
+  return {
+    text: 'Tôi là Intelligence của IPAVIET OS. Tôi có thể giúp bạn gia hạn VIP, ký IPA, nạp xu, tìm app, hoặc xử lý lỗi.',
+    actions: [
+      { label: 'Gia hạn VIP', route: '/buy-vip', style: 'primary' },
+      { label: 'Ký IPA', route: '/sign', style: 'secondary' },
+      { label: 'Nạp xu', route: '/account', style: 'secondary' },
+      { label: 'Tìm app', route: '/apps', style: 'ghost' },
+    ],
+    intent: 'greeting',
+  };
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   MAIN SCREEN — Spatial Intelligence
+   ═══════════════════════════════════════════════════════════════ */
+
+export default function AiSupportScreen() {
+  const router = useRouter();
+  const userState = useUserState();
+  const haptic = useHaptic();
+
+  const [messages, setMessages] = useState<IntelligenceMessage[]>([]);
   const [inputText, setInputText] = useState('');
-  const [isThinking, setIsThinking] = useState(false);
-  const [appsData, setAppsData] = useState<AppItem[]>([]);
+  const [orbState, setOrbState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [apps, setApps] = useState<AppItem[]>([]);
 
   const scrollViewRef = useRef<ScrollView>(null);
-  const avatarPulse = useRef(new Animated.Value(1)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
-  const scrollY = useRef(new Animated.Value(0)).current;
 
-  // Pulse & Glow Animation
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(avatarPulse, { toValue: 1.08, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(avatarPulse, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ])
-    );
-    const glow = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ])
-    );
-    pulse.start();
-    glow.start();
-    return () => {
-      pulse.stop();
-      glow.stop();
-    };
-  }, []);
-
-  // Fetch App Data
   useEffect(() => {
     Promise.all([fetchRegularApps(), fetchVIPApps()]).then(([reg, vip]) => {
-      setAppsData([...reg, ...vip]);
+      setApps([...reg, ...vip]);
     });
-  }, []);
-
-  // Auth & real-time listener
-  useEffect(() => {
-    let unsubUserDoc: any;
-    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        unsubUserDoc = onSnapshot(
-          doc(db, 'users', currentUser.uid),
-          (snap) => {
-            if (snap.exists()) {
-              const data = snap.data();
-              setUserCoins(data.coins || 0);
-              const exp = data.vipExpire;
-              if (exp) {
-                const ms = exp.toMillis ? exp.toMillis() : exp.seconds ? exp.seconds * 1000 : Number(exp) || 0;
-                if (ms > Date.now()) {
-                  setVipExpire(new Date(ms).toLocaleDateString('vi-VN'));
-                } else {
-                  setVipExpire('Hết hạn');
-                }
-              } else {
-                setVipExpire('Chưa đăng ký');
-              }
-            }
-          },
-          (err) => console.warn('[AI Support] User doc error:', err)
-        );
-      } else {
-        setUserCoins(0);
-        setVipExpire('Chưa đăng nhập');
-      }
-    });
-
-    return () => {
-      unsubAuth();
-      if (unsubUserDoc) unsubUserDoc();
-    };
   }, []);
 
   const scrollToBottom = useCallback(() => {
@@ -409,387 +793,139 @@ export default function AiSupportScreen() {
     }, 150);
   }, []);
 
-  const resetChat = useCallback(() => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    setMessages([]);
-  }, []);
+  const handleSend = useCallback(() => {
+    if (!inputText.trim()) return;
 
-  // AI Intent Process Engine
-  const processQuery = useCallback(
-    async (rawText: string) => {
-      const text = removeAccents(rawText.trim());
-      const nowTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const userMsg: IntelligenceMessage = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: inputText.trim(),
+      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+    };
 
-      const userMsg: Message = {
-        id: Date.now().toString(),
-        sender: 'user',
-        text: rawText,
-        timestamp: nowTime,
-      };
+    setMessages((prev) => [...prev, userMsg]);
+    const inputCopy = inputText.trim();
+    setInputText('');
+    setOrbState('thinking');
+    scrollToBottom();
 
-      setMessages((prev) => [...prev, userMsg]);
-      setInputText('');
-      setIsThinking(true);
-      scrollToBottom();
-
-      await new Promise((r) => setTimeout(r, 700));
-
-      let botText = '';
-      let actions: Message['actions'] = [];
-      let matchedApps: AppItem[] = [];
-
-      if (text.includes('vip') || text.includes('gia han') || text.includes('mua goi') || text.includes('nang cap')) {
-        botText = `👑 **Đặc Quyền VIP IPAVIET OS**\n\nKhi nâng cấp gói VIP, sếp sẽ nhận được các đặc quyền cao cấp:\n• Tải & cài đặt ứng dụng VIP tốc độ cao không giới hạn.\n• Ký App ngoại tuyến không bị dính thu hồi chứng chỉ.\n• Hỗ trợ ưu tiên 24/7 từ đội ngũ kỹ thuật.\n\nSếp chọn gói phù hợp bên dưới nhé!`;
-        actions = [
-          { label: '👑 NÂNG CẤP VIP NGAY', route: '/buy-vip', style: 'primary' },
-          { label: '💳 NẠP TIỀN VÀO TÀI KHOẢN', route: '/account', style: 'yellow' },
-        ];
-      } else if (text.includes('ky app') || text.includes('vsign') || text.includes('cert') || text.includes('p12') || text.includes('provision') || text.includes('dylib') || text.includes('zip')) {
-        botText = `🛠️ **Hướng Dẫn Ký IPA Ngoại Tuyến (VSign Pro)**\n\n1. **Chuẩn bị**: Nạp file chứng chỉ dạng tệp ZIP (chứa file P12 và MobileProvision) vào ứng dụng.\n2. **Chọn App**: Chọn tệp IPA sếp muốn ký từ bộ nhớ máy.\n3. **Chèn Dylib/Deb**: Sếp có thể bấm chèn thêm các tệp Hack/Tweak Dylib tùy chỉnh.\n4. **Bấm Ký App**: Quá trình ký diễn ra 100% ngoại tuyến trên thiết bị di động của sếp.`;
-        actions = [
-          { label: '🛠️ MỞ MÀN HÌNH KÝ APP', route: '/sign', style: 'primary' },
-          { label: '📂 NẠP CHỨNG CHỈ ZIP', route: '/sign?importCert=true', style: 'yellow' },
-        ];
-      } else if (text.includes('nap') || text.includes('tien') || text.includes('xu') || text.includes('ngan hang') || text.includes('bank') || text.includes('chuyen khoan')) {
-        const userEmail = auth.currentUser?.email || 'TaiKhoanCuaSep';
-        botText = `💳 **Hướng Dẫn Nạp Xu Tự Động (ACB Bank)**\n\nSếp vui lòng chuyển khoản theo thông tin bên dưới, hệ thống sẽ cộng xu tự động sau 10 - 30 giây:\n\n• **Ngân hàng**: ACB (Á Châu)\n• **Số tài khoản**: \`${ACCOUNT_NO}\`\n• **Chủ tài khoản**: ${ACCOUNT_NAME}\n• **Nội dung chuyển khoản**: \`NAP ${userEmail}\`\n\n*(Lưu ý điền đúng cú pháp Email để xu tự động nạp nhé sếp!)*`;
-        actions = [
-          { label: '💳 ĐẾN TRANG NẠP TIỀN', route: '/account', style: 'primary' },
-          { label: '💬 LIÊN HỆ ADMIN HỖ TRỢ', route: '/account', style: 'yellow' },
-        ];
-      } else if (text.includes('crash') || text.includes('loi') || text.includes('thu hoi') || text.includes('văng') || text.includes('vang') || text.includes('khong mo duoc')) {
-        botText = `⚠️ **Khắc Phục Lỗi App Bị Crash / Thu Hồi Chứng Chỉ**\n\n• **Nguyên nhân**: Apple đã thu hồi chứng chỉ doanh nghiệp dùng chung.\n• **Cách xử lý**: \n  1. Sếp gỡ bản app bị văng ra khỏi máy.\n  2. Vào mục **Ký App** trên ứng dụng để ký lại bằng chứng chỉ cá nhân của sếp.\n  3. Hoặc nâng cấp **VIP IPAVIET** để dùng chứng chỉ riêng độc quyền chống thu hồi!`;
-        actions = [
-          { label: '👑 MUA CHỨNG CHỈ VIP', route: '/buy-vip', style: 'primary' },
-          { label: '🛠️ TỰ KÝ LẠI APP', route: '/sign', style: 'yellow' },
-        ];
-      } else if (text.includes('ipa') || text.includes('game') || text.includes('hack') || text.includes('cheat') || text.includes('tim') || text.includes('app') || text.includes('youtube') || text.includes('facebook') || text.includes('tiktok')) {
-        const queryClean = text.replace(/(tim|app|ipa|hack|cheat|can|muon|cho|xem)/g, '').trim();
-        if (queryClean.length >= 2) {
-          matchedApps = appsData.filter((a) =>
-            removeAccents(a.name).includes(queryClean) || removeAccents(a.category || '').includes(queryClean)
-          ).slice(0, 4);
-        }
-
-        if (matchedApps.length > 0) {
-          botText = `🔍 **Tìm Thấy ${matchedApps.length} Ứng Dụng Phù Hợp Cho Sếp:**`;
-        } else {
-          botText = `📱 **Kho IPA Cao Cấp IPAVIET OS**\n\nHệ thống sở hữu hàng trăm ứng dụng iOS đã Mod/Cheat/Tweak sẵn. Sếp có thể tìm kiếm tên app tại Kho IPA hoặc yêu cầu Admin hỗ trợ nạp app mới!`;
-        }
-        actions = [
-          { label: '📦 MỞ KHO IPA', route: '/apps', style: 'primary' },
-          { label: '👑 MỞ KHO APP VIP', route: '/vip', style: 'yellow' },
-        ];
-      } else if (text.includes('mmo') || text.includes('spotify') || text.includes('netflix') || text.includes('chatgpt') || text.includes('tai khoan') || text.includes('cho mmo')) {
-        botText = `🛒 **Tạp Hóa MMO — Tài Khoản Bán Tự Động**\n\nSếp có thể mua các gói tài khoản Premium chính chủ với giá siêu rẻ:\n• Spotify Premium 1 Năm (Chính chủ)\n• Netflix Premium 4K\n• ChatGPT Plus / Claude Pro\n• Key Windows & Office Bản Quyền`;
-        actions = [
-          { label: '🛒 MỞ CHỢ MMO', route: '/mmo', style: 'primary' },
-        ];
-      } else if (text.includes('admin') || text.includes('lien he') || text.includes('zalo') || text.includes('telegram') || text.includes('ho tro')) {
-        botText = `💬 **Kênh Hỗ Trợ Kỹ Thuật IPAVIET OS**\n\nNếu sếp cần hỗ trợ trực tiếp từ Admin:\n• **Zalo / Hotline**: 0987.xxx.xxx\n• **Telegram**: @ipaviet_support\n• **Thời gian làm việc**: 08:00 - 23:00 hàng ngày`;
-        actions = [
-          { label: '💬 LIÊN HỆ ZALO ADMIN', actionType: 'zalo', style: 'primary' },
-        ];
-      } else {
-        botText = `🤖 **Dạ em là Trợ Lý IPAVIET AI đây ạ!**\n\nEm có thể hỗ trợ sếp tất cả các công việc trên hệ thống:\n• Hướng dẫn ký tệp IPA & nạp chứng chỉ P12 / MobileProvision.\n• Kiểm tra số dư xu, hướng dẫn nạp tiền tự động qua ACB Bank.\n• Tư vấn các gói VIP & xử lý lỗi app văng / thu hồi.\n• Tìm kiếm ứng dụng Mod / Tweak IPA trong kho.\n\nSếp chọn tác vụ nhanh bên dưới hoặc gõ câu hỏi để em trợ giúp nhé!`;
-        actions = [
-          { label: '👑 GIA HẠN VIP', route: '/buy-vip', style: 'primary' },
-          { label: '🛠️ KÝ APP IPA', route: '/sign', style: 'yellow' },
-          { label: '💳 NẠP TIỀN', route: '/account', style: 'primary' },
-          { label: '📦 KHO IPA', route: '/apps', style: 'yellow' },
-        ];
-      }
-
-      const botMsg: Message = {
+    setTimeout(() => {
+      const res = processIntent(inputCopy, apps, userState.user?.email);
+      const botMsg: IntelligenceMessage = {
         id: (Date.now() + 1).toString(),
-        sender: 'bot',
-        text: botText,
-        timestamp: nowTime,
-        actions,
-        appCards: matchedApps.length > 0 ? matchedApps : undefined,
+        sender: 'intelligence',
+        text: res.text,
+        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        actions: res.actions,
+        appCards: res.appCards,
+        intent: res.intent,
       };
 
-      setIsThinking(false);
+      setOrbState('speaking');
       setMessages((prev) => [...prev, botMsg]);
       scrollToBottom();
-    },
-    [appsData, scrollToBottom]
-  );
 
-  const handleActionPress = useCallback(
-    (act: CommandAction) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-      if (act.route) {
-        router.push(act.route as any);
-      } else if (act.actionType === 'zalo') {
-        Alert.alert('Liên hệ Admin', 'Zalo Kỹ Thuật IPAVIET: 0987.xxx.xxx (Sếp copy số điện thoại nhé!)');
-      }
-    },
-    [router]
-  );
+      setTimeout(() => {
+        setOrbState('idle');
+      }, 2000);
+    }, 800);
+  }, [inputText, apps, userState, scrollToBottom]);
 
-  const handleAppPress = useCallback(
-    (id: string) => {
-      router.push(`/details/${id}` as any);
-    },
-    [router]
-  );
+  const handleAction = useCallback((act: CommandAction) => {
+    if (act.route) {
+      router.push(act.route as any);
+    } else if (act.actionType === 'zalo') {
+      Alert.alert('Liên hệ Admin', 'Zalo Kỹ Thuật IPAVIET: 0987.xxx.xxx');
+    }
+  }, [router]);
 
-  const suggestions = [
-    { label: 'Gia hạn VIP', query: 'gia han vip', icon: <Crown size={16} color="#F59E0B" /> },
-    { label: 'Ký App IPA', query: 'ky app vsign', icon: <Wrench size={16} color="#8B5CF6" /> },
-    { label: 'Lỗi chứng chỉ', query: 'loi chung chi app crash', icon: <AlertTriangle size={16} color="#F43F5E" /> },
-    { label: 'Nạp xu ACB', query: 'nap tien ngan hang', icon: <Wallet size={16} color="#10B981" /> },
-    { label: 'Tìm IPA YouTube', query: 'tim ipa youtube', icon: <Sparkles size={16} color="#00F0FF" /> },
-    { label: 'Admin hỗ trợ', query: 'lien he zalo admin', icon: <MessageSquare size={16} color="#3B82F6" /> },
-  ];
+  const handleAppPress = useCallback((id: string) => {
+    router.push(`/details/${id}` as any);
+  }, [router]);
+
+  const resetChat = useCallback(() => {
+    haptic('success');
+    setMessages([]);
+    setOrbState('idle');
+  }, [haptic]);
 
   return (
     <View style={styles.root}>
-      <StatusBar style={isLight ? 'dark' : 'light'} />
-      <RNStatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+      <StatusBar style="light" />
+      <RNStatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Gradient Background Layer */}
-      <LinearGradient
-        colors={isLight ? ['#F0F4FF', '#F4F4F6', '#FFF0F5'] : ['#03040A', '#0a0e27', '#0f172a']}
-        locations={[0, 0.5, 1]}
-        style={StyleSheet.absoluteFill}
-      />
+      {/* 10 Layer Spatial Background */}
+      <LivingBackground />
 
-      {/* Floating Orbs Background */}
-      <Animated.View
-        style={[
-          styles.orb,
-          {
-            backgroundColor: isLight ? 'rgba(0,82,255,0.08)' : 'rgba(0,240,255,0.06)',
-            top: '10%',
-            left: '-10%',
-            transform: [{ scale: avatarPulse }],
-          },
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.orb,
-          {
-            backgroundColor: isLight ? 'rgba(139,92,246,0.06)' : 'rgba(139,92,246,0.05)',
-            bottom: '15%',
-            right: '-15%',
-            width: 280,
-            height: 280,
-            transform: [{ scale: Animated.add(0.8, Animated.multiply(glowAnim, 0.2)) }],
-          },
-        ]}
-      />
-
-      {/* Glass Top Navigation Header */}
+      {/* Floating Header Bar */}
       <View style={styles.topHeader}>
-        <View style={styles.headerBlurWrap}>
-          <BlurView intensity={40} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
-          <View style={styles.headerContent}>
-            <TouchableOpacity
-              style={styles.backBtn}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                router.back();
-              }}
-              activeOpacity={0.8}
-            >
-              <ArrowLeft size={20} color={COLORS.text} strokeWidth={2.5} />
-            </TouchableOpacity>
+        <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={styles.headerInner}>
+          <TouchableOpacity style={styles.iconCircleBtn} onPress={() => router.back()} activeOpacity={0.8}>
+            <ArrowLeft size={18} color={S.text} strokeWidth={2.5} />
+          </TouchableOpacity>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Animated.View
-                style={[
-                  styles.aiAvatarBox,
-                  {
-                    transform: [{ scale: avatarPulse }],
-                    shadowColor: '#00F0FF',
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: Animated.multiply(glowAnim, 0.6),
-                    shadowRadius: 12,
-                  },
-                ]}
-              >
-                <Bot size={18} color="#00F0FF" strokeWidth={2.5} />
-              </Animated.View>
-              <View>
-                <Text style={styles.headerTitle}>Trợ Lý IPAVIET AI</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
-                  <Text style={styles.headerSub}>Tư vấn & Hỗ trợ kỹ thuật 24/7</Text>
-                </View>
-              </View>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitleText}>IPAVIET Intelligence</Text>
+            <View style={styles.statusChip}>
+              <View style={[styles.statusDot, { backgroundColor: S.emerald }]} />
+              <Text style={styles.statusText}>{userState.user ? userState.user.email : 'Spatial OS 2026'}</Text>
             </View>
-
-            <TouchableOpacity style={styles.resetBtn} onPress={resetChat} activeOpacity={0.8}>
-              <RotateCcw size={16} color={COLORS.textMuted} />
-            </TouchableOpacity>
           </View>
+
+          <TouchableOpacity style={styles.iconCircleBtn} onPress={resetChat} activeOpacity={0.8}>
+            <RotateCcw size={16} color={S.textSecondary} />
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* User Member Info Profile Bar */}
-      <View style={styles.profileBar}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <UserCheck size={14} color={COLORS.textMuted} />
-          <Text style={styles.profileUserText} numberOfLines={1}>
-            {user ? user.email || 'Hội viên' : 'Khách'}
-          </Text>
-        </View>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Wallet size={13} color="#10B981" />
-            <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
-              {userCoins.toLocaleString('vi-VN')}đ
-            </Text>
-          </View>
-
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Crown size={13} color="#F59E0B" />
-            <Text style={{ fontSize: 12, fontWeight: '800', color: '#F59E0B' }}>
-              {vipExpire}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Chat Messages Container */}
+      {/* Main Stream Area */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <Animated.ScrollView
+        <ScrollView
           ref={scrollViewRef}
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24 }}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
-          scrollEventThrottle={16}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 110, paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
         >
-          {/* Default Hero State */}
-          {messages.length === 0 && (
-            <View style={styles.heroBox}>
-              <Animated.View
-                style={[
-                  styles.heroAvatar,
-                  { transform: [{ scale: avatarPulse }] },
-                ]}
-              >
-                <LinearGradient
-                  colors={isLight ? ['#0052FF', '#3B82F6'] : ['#00F0FF', '#0EA5E9']}
-                  style={[StyleSheet.absoluteFill, { borderRadius: 40 }]}
-                />
-                <Bot size={36} color="#FFFFFF" strokeWidth={2.2} />
-              </Animated.View>
-
-              <Text style={styles.heroTitle}>
-                Xin chào <Text style={{ color: isLight ? '#0052FF' : '#00F0FF' }}>{user?.displayName || 'sếp'}</Text>!
-              </Text>
-              <Text style={styles.heroSub}>
-                Em là Trợ Lý AI Thông Minh. Hôm nay em có thể giúp gì cho sếp ạ?
-              </Text>
-
-              {/* Suggestions Grid */}
-              <View style={styles.suggestionGrid}>
-                {suggestions.map((item, index) => (
-                  <SuggestionPill
-                    key={index}
-                    item={item}
-                    index={index}
-                    onPress={processQuery}
-                    styles={styles}
-                  />
-                ))}
+          {/* Energy Orb Header */}
+          <View style={styles.orbHeaderBox}>
+            <EnergyOrb state={orbState} />
+            {messages.length === 0 && (
+              <View style={styles.heroTextBox}>
+                <Text style={styles.heroTitleText}>
+                  Xin chào, <Text style={{ color: S.cyan }}>{userState.user?.displayName || 'Sếp'}</Text>
+                </Text>
+                <Text style={styles.heroSubText}>
+                  Hệ thống Trợ lý Ảo Spatial Intelligence đã sẵn sàng hỗ trợ ký App, nạp xu và tra cứu dữ liệu.
+                </Text>
               </View>
+            )}
+          </View>
 
-              {/* Quick Stats Row */}
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <ShieldCheck size={18} color={isLight ? '#0052FF' : '#00F0FF'} />
-                  <Text style={styles.statText}>Bảo mật 100%</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Zap size={18} color={isLight ? '#0052FF' : '#00F0FF'} />
-                  <Text style={styles.statText}>Phản hồi tức thì</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Flame size={18} color={isLight ? '#0052FF' : '#00F0FF'} />
-                  <Text style={styles.statText}>500+ App Mod</Text>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* Render Messages */}
-          {messages.map((msg) => (
-            <MessageBubble
-              key={msg.id}
-              msg={msg}
-              isLight={isLight}
-              styles={styles}
-              onActionPress={handleActionPress}
+          {/* Messages Entities */}
+          {messages.map((m) => (
+            <MessageEntity
+              key={m.id}
+              message={m}
+              onAction={handleAction}
               onAppPress={handleAppPress}
             />
           ))}
+        </ScrollView>
 
-          {/* AI Thinking Indicator */}
-          {isThinking && (
-            <View style={[styles.msgRow, { justifyContent: 'flex-start' }]}>
-              <View style={styles.msgAvatarBox}>
-                <Bot size={14} color="#00F0FF" />
-              </View>
-              <View style={[styles.msgBubble, styles.botBubble, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
-                <TypingIndicator isLight={isLight} />
-                <Text style={{ color: COLORS.textMuted, fontSize: 13, fontWeight: '600' }}>
-                  IPAVIET AI đang suy nghĩ...
-                </Text>
-              </View>
-            </View>
-          )}
-        </Animated.ScrollView>
-
-        {/* Input Bar */}
-        <View style={styles.inputBarArea}>
-          <View style={[styles.inputPill, isInputFocused && { borderColor: isLight ? 'rgba(0,82,255,0.4)' : 'rgba(0,240,255,0.5)' }]}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Hỏi AI bất cứ điều gì (Ký app, nạp xu, VIP...)..."
-              placeholderTextColor={COLORS.textMuted}
-              value={inputText}
-              onChangeText={setInputText}
-              onFocus={() => setIsInputFocused(true)}
-              onBlur={() => setIsInputFocused(false)}
-              onSubmitEditing={() => inputText.trim() && processQuery(inputText)}
-              returnKeyType="send"
-              selectionColor={isLight ? '#0052FF' : '#00F0FF'}
-            />
-
-            <TouchableOpacity
-              style={[
-                styles.sendBtn,
-                {
-                  backgroundColor: inputText.trim()
-                    ? (isLight ? '#0052FF' : '#00F0FF')
-                    : isLight
-                      ? 'rgba(0,0,0,0.06)'
-                      : 'rgba(255,255,255,0.08)',
-                  transform: [{ scale: inputText.trim() ? 1 : 0.9 }],
-                },
-              ]}
-              disabled={!inputText.trim()}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                inputText.trim() && processQuery(inputText);
-              }}
-              activeOpacity={0.8}
-            >
-              <Send size={16} color={inputText.trim() ? (isLight ? '#FFFFFF' : '#03040A') : COLORS.textMuted} strokeWidth={2.5} />
-            </TouchableOpacity>
-          </View>
+        {/* Liquid Input Container */}
+        <View style={styles.inputDock}>
+          <LiquidInput
+            value={inputText}
+            onChangeText={setInputText}
+            onSubmit={handleSend}
+            orbState={orbState}
+            onFocusChange={setIsInputFocused}
+          />
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -797,349 +933,348 @@ export default function AiSupportScreen() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   STYLES — Premium Glassmorphism Engine
+   STYLES — Living Spatial Engine
    ═══════════════════════════════════════════════════════════════ */
-const getStyles = (theme: typeof COLORS, isLight: boolean) =>
-  StyleSheet.create({
-    root: {
-      flex: 1,
-      backgroundColor: 'transparent',
-    },
-    orb: {
-      position: 'absolute',
-      width: 300,
-      height: 300,
-      borderRadius: 150,
-    },
 
-    // Header
-    topHeader: {
-      paddingTop: Platform.OS === 'ios' ? 48 : 34,
-      zIndex: 100,
-    },
-    headerBlurWrap: {
-      overflow: 'hidden',
-      borderBottomWidth: 1,
-      borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
-      backgroundColor: isLight ? 'rgba(255,255,255,0.75)' : 'rgba(18,20,32,0.75)',
-    },
-    headerContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-    },
-    backBtn: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      backgroundColor: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    aiAvatarBox: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      backgroundColor: isLight ? 'rgba(0,82,255,0.12)' : 'rgba(0,240,255,0.15)',
-      borderWidth: 1.5,
-      borderColor: isLight ? 'rgba(0,82,255,0.3)' : 'rgba(0,240,255,0.4)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    headerTitle: {
-      fontSize: 15,
-      fontWeight: '900',
-      color: theme.text,
-      letterSpacing: -0.3,
-    },
-    headerSub: {
-      fontSize: 11,
-      color: isLight ? '#0052FF' : '#00F0FF',
-      fontWeight: '700',
-      marginTop: 1,
-    },
-    resetBtn: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      backgroundColor: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: S.void,
+  },
 
-    // Profile Bar
-    profileBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      backgroundColor: isLight ? 'rgba(255,255,255,0.6)' : 'rgba(15,18,32,0.6)',
-      borderBottomWidth: 1,
-      borderColor: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)',
-    },
-    profileUserText: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: theme.text,
-      maxWidth: 140,
-    },
+  // Header
+  topHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: Platform.OS === 'ios' ? 94 : 70,
+    paddingTop: Platform.OS === 'ios' ? 44 : 20,
+    zIndex: 200,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    overflow: 'hidden',
+  },
+  headerInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+  },
+  iconCircleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerCenter: {
+    alignItems: 'center',
+  },
+  headerTitleText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: S.text,
+    letterSpacing: -0.3,
+  },
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: S.textSecondary,
+  },
 
-    // Hero Box
-    heroBox: {
-      alignItems: 'center',
-      paddingVertical: 36,
-      paddingHorizontal: 16,
-    },
-    heroAvatar: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 20,
-      shadowColor: isLight ? '#0052FF' : '#00F0FF',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.3,
-      shadowRadius: 20,
-      elevation: 10,
-    },
-    heroTitle: {
-      fontSize: 26,
-      fontWeight: '900',
-      color: theme.text,
-      textAlign: 'center',
-      letterSpacing: -0.5,
-    },
-    heroSub: {
-      fontSize: 14,
-      color: theme.textMuted,
-      textAlign: 'center',
-      marginTop: 8,
-      lineHeight: 22,
-      maxWidth: 300,
-      fontWeight: '500',
-    },
-    suggestionGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 10,
-      marginTop: 28,
-      justifyContent: 'center',
-    },
-    suggestionPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 16,
-      paddingVertical: 11,
-      borderRadius: 22,
-      backgroundColor: isLight ? 'rgba(255,255,255,0.8)' : 'rgba(15,18,32,0.8)',
-      borderWidth: 1,
-      borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
-      shadowColor: isLight ? '#000' : '#00F0FF',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: isLight ? 0.04 : 0.08,
-      shadowRadius: 8,
-      elevation: 2,
-    },
-    suggestionPillText: {
-      fontSize: 12,
-      fontWeight: '800',
-      color: theme.text,
-    },
-    statsRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: 32,
-      paddingVertical: 14,
-      paddingHorizontal: 20,
-      borderRadius: 16,
-      backgroundColor: isLight ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.03)',
-      borderWidth: 1,
-      borderColor: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)',
-      gap: 16,
-    },
-    statItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    statText: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: isLight ? '#475569' : '#94A3B8',
-    },
-    statDivider: {
-      width: 1,
-      height: 16,
-      backgroundColor: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)',
-    },
+  // Orb Header Box
+  orbHeaderBox: {
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  orbGlowLayer: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  orbGlowCircle: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+  },
+  orbCoreBox: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: S.cyan,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  orbCoreGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroTextBox: {
+    alignItems: 'center',
+    marginTop: 20,
+    paddingHorizontal: 20,
+  },
+  heroTitleText: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: S.text,
+    textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  heroSubText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: S.textSecondary,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+    maxWidth: 320,
+  },
 
-    // Chat Message Rows
-    msgRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-end',
-      marginBottom: 18,
-      gap: 8,
-    },
-    msgAvatarBox: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      backgroundColor: isLight ? 'rgba(0,82,255,0.1)' : 'rgba(0,240,255,0.12)',
-      borderWidth: 1,
-      borderColor: isLight ? 'rgba(0,82,255,0.2)' : 'rgba(0,240,255,0.25)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 2,
-    },
-    msgBubble: {
-      maxWidth: '82%',
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      borderRadius: 22,
-    },
-    userBubble: {
-      backgroundColor: isLight ? '#0052FF' : '#00F0FF',
-      borderBottomRightRadius: 6,
-      shadowColor: isLight ? '#0052FF' : '#00F0FF',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 12,
-      elevation: 5,
-    },
-    botBubble: {
-      backgroundColor: isLight ? 'rgba(255,255,255,0.9)' : 'rgba(15,18,32,0.9)',
-      borderWidth: 1,
-      borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
-      borderBottomLeftRadius: 6,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: isLight ? 0.05 : 0.15,
-      shadowRadius: 12,
-      elevation: 3,
-    },
-    msgText: {
-      fontSize: 14,
-      lineHeight: 22,
-      fontWeight: '500',
-    },
-    msgTime: {
-      fontSize: 10,
-      fontWeight: '700',
-      marginTop: 8,
-      alignSelf: 'flex-end',
-      letterSpacing: 0.2,
-    },
+  // User Message
+  userEntity: {
+    alignSelf: 'flex-end',
+    marginBottom: 20,
+    maxWidth: '84%',
+  },
+  userEntityInner: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 22,
+    borderBottomRightRadius: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  userEntityText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: S.text,
+    lineHeight: 22,
+  },
 
-    // AI App Cards
-    aiAppCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: 12,
-      borderRadius: 16,
-      backgroundColor: isLight ? 'rgba(244,244,246,0.8)' : 'rgba(22,25,40,0.8)',
-      borderWidth: 1,
-      borderColor: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)',
-    },
-    aiAppIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-    },
-    aiAppName: {
-      fontSize: 13,
-      fontWeight: '900',
-      color: theme.text,
-      letterSpacing: -0.2,
-    },
-    aiAppCat: {
-      fontSize: 11,
-      color: theme.textMuted,
-      marginTop: 3,
-      fontWeight: '600',
-    },
-    aiAppBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-      paddingHorizontal: 14,
-      paddingVertical: 7,
-      borderRadius: 18,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 6,
-      elevation: 3,
-    },
+  // Intelligence Entity
+  intelligenceEntity: {
+    marginBottom: 28,
+  },
+  intentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  intentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: S.cyan,
+  },
+  intentLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: S.cyan,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  entityTime: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: S.textTertiary,
+    marginLeft: 'auto',
+  },
+  entityContent: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 22,
+    borderTopLeftRadius: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+  },
+  intelligenceText: {
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: '500',
+    color: S.textPrimary,
+  },
+  wordToken: {
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: '500',
+    color: S.textPrimary,
+  },
 
-    // Action Chips
-    actionChipRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-      marginTop: 14,
-    },
-    actionChip: {
-      paddingHorizontal: 16,
-      paddingVertical: 9,
-      borderRadius: 20,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 6,
-      elevation: 2,
-    },
-    actionChipPrimary: {
-      backgroundColor: isLight ? '#0052FF' : '#00F0FF',
-    },
-    actionChipYellow: {
-      backgroundColor: '#F59E0B',
-    },
-    actionChipDanger: {
-      backgroundColor: '#F43F5E',
-    },
-    actionChipText: {
-      fontSize: 12,
-      fontWeight: '900',
-      letterSpacing: -0.2,
-    },
+  // App Cards Row
+  appCardRow: {
+    gap: 12,
+    marginTop: 14,
+    paddingRight: 20,
+  },
+  spatialCardWrap: {
+    width: 220,
+  },
+  spatialCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    padding: 14,
+    overflow: 'hidden',
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  cardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+  },
+  cardMeta: {
+    flex: 1,
+  },
+  cardName: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: S.text,
+    letterSpacing: -0.2,
+  },
+  cardCategory: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: S.textSecondary,
+    marginTop: 2,
+  },
+  cardRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  cardRatingText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: S.amber,
+  },
+  cardBadgeRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 12,
+  },
+  cardBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  cardBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  cardAction: {
+    marginTop: 12,
+  },
+  cardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: S.cyan,
+    paddingVertical: 8,
+    borderRadius: 14,
+  },
+  cardButtonText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: S.void,
+  },
 
-    // Input Bar
-    inputBarArea: {
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      backgroundColor: isLight ? 'rgba(244,244,246,0.9)' : 'rgba(3,4,10,0.9)',
-      borderTopWidth: 1,
-      borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
-    },
-    inputPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      height: 52,
-      borderRadius: 26,
-      backgroundColor: isLight ? 'rgba(255,255,255,0.9)' : 'rgba(15,18,32,0.9)',
-      borderWidth: 1.5,
-      borderColor: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)',
-      paddingLeft: 18,
-      paddingRight: 6,
-    },
-    textInput: {
-      flex: 1,
-      color: theme.text,
-      fontSize: 14,
-      fontWeight: '600',
-      height: '100%',
-      padding: 0,
-    },
-    sendBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-  });
+  // Action Chips
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 14,
+  },
+  actionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  actionChipText: {
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+  },
+
+  // Input Dock
+  inputDock: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 24 : 16,
+    left: 16,
+    right: 16,
+    zIndex: 200,
+  },
+  liquidInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingLeft: 20,
+    paddingRight: 8,
+    overflow: 'hidden',
+    shadowColor: S.cyan,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  liquidInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: S.text,
+    height: '100%',
+    padding: 0,
+  },
+  sendCapsule: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+});
