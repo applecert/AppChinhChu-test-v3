@@ -11,7 +11,7 @@ import {
   Platform,
   StatusBar as RNStatusBar,
   Alert,
-  KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
@@ -96,7 +96,7 @@ const S = {
   radius: { xs: 8, sm: 14, md: 20, lg: 28, xl: 36, full: 999 },
 
   springBouncy: { damping: 12, stiffness: 200, mass: 0.8 },
-  springSoft: { damping: 20, stiffness: 120, mass: 1.2 },
+  springSoft: { damping: 18, stiffness: 140, mass: 1.0 },
   timingFast: { duration: 250, easing: Easing.out(Easing.quad) },
 };
 
@@ -358,25 +358,27 @@ const LiquidInput = memo(({ value, onChangeText, onSubmit, onFocusChange }: Liqu
   const haptic = useHaptic();
 
   const animatedStyle = useAnimatedStyle(() => ({
-    borderColor: focused.value === 1 ? 'rgba(0,229,255,0.4)' : 'rgba(255,255,255,0.08)',
+    borderColor: focused.value === 1 ? 'rgba(0,229,255,0.5)' : 'rgba(255,255,255,0.08)',
     transform: [{ scale: scale.value }],
   }));
 
   const handleFocus = () => {
     focused.value = withTiming(1, S.timingFast);
+    scale.value = withSpring(1.02, S.springSoft);
     onFocusChange(true);
     haptic('light');
   };
 
   const handleBlur = () => {
     focused.value = withTiming(0, S.timingFast);
+    scale.value = withSpring(1, S.springSoft);
     onFocusChange(false);
   };
 
   const handleSubmit = () => {
     if (!value.trim()) return;
     scale.value = withSequence(
-      withTiming(0.98, { duration: 80 }),
+      withTiming(0.96, { duration: 80 }),
       withSpring(1, S.springBouncy),
     );
     haptic('medium');
@@ -480,13 +482,13 @@ const SpatialAppCard = memo(({ app, onPress, index }: { app: AppItem; onPress: (
   const haptic = useHaptic();
 
   useEffect(() => {
-    entry.value = withDelay(index * 80, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
+    entry.value = withDelay(index * 80, withSpring(1, S.springSoft));
   }, []);
 
   const entryStyle = useAnimatedStyle(() => ({
     opacity: entry.value,
     transform: [
-      { translateY: interpolate(entry.value, [0, 1], [20, 0]) },
+      { translateY: interpolate(entry.value, [0, 1], [30, 0]) },
       { scale: press.value },
     ],
   }));
@@ -557,7 +559,7 @@ const ActionChip = memo(({ action, onPress, index }: { action: CommandAction; on
 
   const style = useAnimatedStyle(() => ({
     opacity: entry.value,
-    transform: [{ scale: press.value }, { translateY: interpolate(entry.value, [0, 1], [10, 0]) }],
+    transform: [{ scale: press.value }, { translateY: interpolate(entry.value, [0, 1], [15, 0]) }],
   }));
 
   const colors = {
@@ -597,12 +599,12 @@ const MessageEntity = memo(({ message, onAction, onAppPress }: {
   const isUser = message.sender === 'user';
 
   useEffect(() => {
-    entry.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
+    entry.value = withSpring(1, { damping: 14, stiffness: 180, mass: 0.8 });
   }, []);
 
   const style = useAnimatedStyle(() => ({
     opacity: entry.value,
-    transform: [{ translateY: interpolate(entry.value, [0, 1], [isUser ? -10 : 20, 0]) }],
+    transform: [{ translateY: interpolate(entry.value, [0, 1], [35, 0]) }],
   }));
 
   if (isUser) {
@@ -780,12 +782,46 @@ export default function AiSupportScreen() {
   const [apps, setApps] = useState<AppItem[]>([]);
 
   const scrollViewRef = useRef<ScrollView>(null);
+  const keyboardOffset = useSharedValue(0);
 
   useEffect(() => {
     Promise.all([fetchRegularApps(), fetchVIPApps()]).then(([reg, vip]) => {
       setApps([...reg, ...vip]);
     });
   }, []);
+
+  // Smooth Reanimated 120Hz Keyboard Slide-Up
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      const targetOffset = -e.endCoordinates.height + (Platform.OS === 'ios' ? 24 : 0);
+      keyboardOffset.value = withTiming(targetOffset, {
+        duration: e.duration || 250,
+        easing: Easing.out(Easing.cubic),
+      });
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
+      keyboardOffset.value = withTiming(0, {
+        duration: e.duration || 250,
+        easing: Easing.out(Easing.cubic),
+      });
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const animatedDockStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: keyboardOffset.value }],
+  }));
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -900,16 +936,12 @@ export default function AiSupportScreen() {
         </View>
       </View>
 
-      {/* Main Stream Area */}
-      <KeyboardAvoidingView
-        style={{ flex: 1, paddingTop: Platform.OS === 'ios' ? 94 : 70 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
+      {/* Main Content Area */}
+      <View style={{ flex: 1, paddingTop: Platform.OS === 'ios' ? 94 : 70 }}>
         <ScrollView
           ref={scrollViewRef}
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 140 }}
           showsVerticalScrollIndicator={false}
         >
           {/* Energy Orb Header */}
@@ -955,34 +987,37 @@ export default function AiSupportScreen() {
           ))}
         </ScrollView>
 
-        {/* Quick Suggestion Scroll Bar above Input */}
-        <View style={styles.quickBarRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
-            {suggestions.map((item, i) => (
-              <TouchableOpacity
-                key={i}
-                style={styles.quickBarBtn}
-                onPress={() => handleSendText(item.query)}
-                activeOpacity={0.8}
-              >
-                {item.icon}
-                <Text style={styles.quickBarText}>{item.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+        {/* Animated Floating Bottom Dock (Input + Quick Suggestions with Smooth 120Hz Reanimated Slide-Up) */}
+        <Animated.View style={[styles.bottomFloatingDock, animatedDockStyle]}>
+          {/* Quick Suggestion Scroll Bar above Input */}
+          <View style={styles.quickBarRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+              {suggestions.map((item, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={styles.quickBarBtn}
+                  onPress={() => handleSendText(item.query)}
+                  activeOpacity={0.8}
+                >
+                  {item.icon}
+                  <Text style={styles.quickBarText}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
 
-        {/* Liquid Input Dock (Flex Layout for Smooth Keyboard Push-Up) */}
-        <View style={styles.inputDock}>
-          <LiquidInput
-            value={inputText}
-            onChangeText={setInputText}
-            onSubmit={handleSend}
-            orbState={orbState}
-            onFocusChange={setIsInputFocused}
-          />
-        </View>
-      </KeyboardAvoidingView>
+          {/* Liquid Input */}
+          <View style={styles.inputDock}>
+            <LiquidInput
+              value={inputText}
+              onChangeText={setInputText}
+              onSubmit={handleSend}
+              orbState={orbState}
+              onFocusChange={setIsInputFocused}
+            />
+          </View>
+        </Animated.View>
+      </View>
     </View>
   );
 }
@@ -1324,7 +1359,14 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
 
-  // Quick Bar Row
+  // Bottom Floating Dock
+  bottomFloatingDock: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 250,
+  },
   quickBarRow: {
     paddingVertical: 6,
   },
@@ -1345,11 +1387,11 @@ const styles = StyleSheet.create({
     color: S.textPrimary,
   },
 
-  // Input Dock (Flex layout for smooth Keyboard avoiding)
+  // Input Dock
   inputDock: {
     paddingHorizontal: 16,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
-    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 14,
+    paddingTop: 4,
     backgroundColor: 'transparent',
   },
   liquidInputContainer: {
