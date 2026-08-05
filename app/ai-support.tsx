@@ -12,6 +12,8 @@ import {
   StatusBar as RNStatusBar,
   Alert,
   Keyboard,
+  Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
@@ -55,13 +57,29 @@ import {
   CheckCircle2,
   FileUp,
   KeyRound,
+  Users,
+  Banknote,
+  Ticket,
+  Box,
+  Layers,
+  PlusCircle,
+  Flame,
+  Settings,
+  LayoutDashboard,
+  Lock,
+  Unlock,
+  Trash2,
+  Bell,
+  RefreshCw,
+  Search,
 } from 'lucide-react-native';
 import { auth, db } from '../firebaseConfig';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, setDoc, updateDoc, collection, getDocs, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { fetchRegularApps, fetchVIPApps, AppItem } from '../constants/data';
 import { COLORS, useThemeUpdate, loadTheme } from '../constants/theme';
 
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyXnH5KjwQVafxGW_W2KlpDY9KHBx_0TAmaNZBqUaPz9WR8T1PDKwB9un37fNA_YO7pmg/exec";
 const BANK_ACCOUNT = '22703611';
 const BANK_NAME = 'ACB';
 const BANK_OWNER = 'TRAN NGUYEN MINH QUI';
@@ -94,7 +112,12 @@ type IntentType =
   | 'crash'
   | 'mmo'
   | 'support'
-  | 'greeting';
+  | 'greeting'
+  | 'admin_stats'
+  | 'admin_users'
+  | 'admin_giftcode'
+  | 'admin_push'
+  | 'admin_config';
 
 interface CommandAction {
   label: string;
@@ -112,7 +135,7 @@ interface IntelligenceMessage {
   actions?: CommandAction[];
   appCards?: AppItem[];
   intent?: IntentType;
-  widgetType?: 'cert_import' | 'bank_deposit' | 'vip_packages' | 'app_search';
+  widgetType?: 'cert_import' | 'bank_deposit' | 'vip_packages' | 'app_search' | 'admin_stats' | 'admin_users' | 'admin_giftcode' | 'admin_push' | 'admin_config';
   isProcessing?: boolean;
 }
 
@@ -121,6 +144,7 @@ interface UserState {
   coins: number;
   vipStatus: string;
   isVIP: boolean;
+  isAdmin: boolean;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -133,17 +157,20 @@ const useUserState = () => {
     coins: 0,
     vipStatus: 'Chưa đăng nhập',
     isVIP: false,
+    isAdmin: false,
   });
 
   useEffect(() => {
     let unsubDoc: any;
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       if (u) {
+        const isAdminEmail = u.email?.toLowerCase() === 'mquitran@gmail.com';
         unsubDoc = onSnapshot(doc(db, 'users', u.uid), (snap) => {
           if (snap.exists()) {
             const d = snap.data();
             const coins = d.coins || 0;
             const exp = d.vipExpire;
+            const isRoleAdmin = d.role === 'admin' || d.isAdmin === true || isAdminEmail;
             let vipText = 'Chưa đăng ký';
             let isV = false;
             if (exp) {
@@ -155,11 +182,13 @@ const useUserState = () => {
                 vipText = 'Hết hạn';
               }
             }
-            setState({ user: u, coins, vipStatus: vipText, isVIP: isV });
+            setState({ user: u, coins, vipStatus: vipText, isVIP: isV, isAdmin: isRoleAdmin });
+          } else {
+            setState({ user: u, coins: 0, vipStatus: 'Chưa đăng ký', isVIP: false, isAdmin: isAdminEmail });
           }
         });
       } else {
-        setState({ user: null, coins: 0, vipStatus: 'Chưa đăng nhập', isVIP: false });
+        setState({ user: null, coins: 0, vipStatus: 'Chưa đăng nhập', isVIP: false, isAdmin: false });
       }
     });
     return () => {
@@ -281,9 +310,10 @@ const ORB_SIZE = 120;
 interface EnergyOrbProps {
   state: 'idle' | 'listening' | 'thinking' | 'speaking';
   isLight: boolean;
+  isAdminMode?: boolean;
 }
 
-const EnergyOrb = memo(({ state, isLight }: EnergyOrbProps) => {
+const EnergyOrb = memo(({ state, isLight, isAdminMode }: EnergyOrbProps) => {
   const breath = useSharedValue(1);
 
   useEffect(() => {
@@ -314,26 +344,30 @@ const EnergyOrb = memo(({ state, isLight }: EnergyOrbProps) => {
     transform: [{ scale: breath.value }],
   }));
 
+  const orbColors = isAdminMode
+    ? ['#FF0055', '#FF7700'] as const
+    : (isLight ? ['#007AFF', '#7C3AED'] as const : ['#00E5FF', '#8B5CF6'] as const);
+
   return (
     <View style={{ width: ORB_SIZE, height: ORB_SIZE, alignSelf: 'center', justifyContent: 'center', alignItems: 'center' }}>
       <Animated.View style={[styles.orbGlowLayer, animatedStyle]}>
         <LinearGradient
-          colors={isLight
-            ? ['rgba(0,122,255,0.25)', 'rgba(139,92,246,0.18)', 'transparent']
-            : ['rgba(0,229,255,0.35)', 'rgba(167,139,250,0.25)', 'transparent']
+          colors={isAdminMode
+            ? ['rgba(255,0,85,0.4)', 'rgba(255,119,0,0.25)', 'transparent']
+            : (isLight ? ['rgba(0,122,255,0.25)', 'rgba(139,92,246,0.18)', 'transparent'] : ['rgba(0,229,255,0.35)', 'rgba(167,139,250,0.25)', 'transparent'])
           }
           style={styles.orbGlowCircle}
         />
       </Animated.View>
 
-      <Animated.View style={[styles.orbCoreBox, animatedStyle, { borderColor: isLight ? 'rgba(0,122,255,0.4)' : 'rgba(255,255,255,0.3)' }]}>
+      <Animated.View style={[styles.orbCoreBox, animatedStyle, { borderColor: isAdminMode ? '#FF0055' : (isLight ? 'rgba(0,122,255,0.4)' : 'rgba(255,255,255,0.3)') }]}>
         <LinearGradient
-          colors={isLight ? ['#007AFF', '#7C3AED'] : ['#00E5FF', '#8B5CF6']}
+          colors={orbColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.orbCoreGradient}
         />
-        <Bot size={42} color="#FFFFFF" strokeWidth={2.2} />
+        {isAdminMode ? <Crown size={42} color="#FFFFFF" strokeWidth={2.2} /> : <Bot size={42} color="#FFFFFF" strokeWidth={2.2} />}
       </Animated.View>
     </View>
   );
@@ -391,7 +425,6 @@ const CertImportWidget = memo(({ onComplete, isLight }: { onComplete: (filename:
         <Text style={[styles.widgetTitleText, { color: isLight ? '#007AFF' : S.cyan }]}>NẠP CHỨNG CHỈ P12 TỰ ĐỘNG</Text>
       </View>
 
-      {/* Select File Button */}
       <TouchableOpacity style={[styles.widgetPickBtn, { backgroundColor: inputBg, borderColor: inputBorder }]} onPress={handlePickFile} activeOpacity={0.8}>
         <FileCheck size={18} color={selectedFile ? S.emerald : subTextColor} />
         <Text style={[styles.widgetPickBtnText, { color: selectedFile ? S.emerald : subTextColor }, selectedFile && { fontWeight: '800' }]} numberOfLines={1}>
@@ -399,7 +432,6 @@ const CertImportWidget = memo(({ onComplete, isLight }: { onComplete: (filename:
         </Text>
       </TouchableOpacity>
 
-      {/* Password Input */}
       <View style={[styles.widgetInputRow, { backgroundColor: inputBg, borderColor: inputBorder }]}>
         <KeyRound size={16} color={subTextColor} />
         <TextInput
@@ -412,7 +444,6 @@ const CertImportWidget = memo(({ onComplete, isLight }: { onComplete: (filename:
         />
       </View>
 
-      {/* Confirm Button */}
       <TouchableOpacity style={styles.widgetSubmitBtn} onPress={handleSubmit} activeOpacity={0.8}>
         <LinearGradient colors={isLight ? ['#007AFF', '#7C3AED'] : [S.cyan, S.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <Zap size={14} color="#FFFFFF" />
@@ -470,7 +501,6 @@ const BankDepositWidget = memo(({ userEmail, isLight }: { userEmail?: string; is
           <Text style={[styles.bankValBold, { color: textColor }]}>{BANK_OWNER}</Text>
         </View>
 
-        {/* STK Row */}
         <View style={[styles.bankCopyRow, { backgroundColor: itemBg, borderColor: itemBorder }]}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.bankLabel, { color: subTextColor }]}>Số tài khoản:</Text>
@@ -486,7 +516,6 @@ const BankDepositWidget = memo(({ userEmail, isLight }: { userEmail?: string; is
           </TouchableOpacity>
         </View>
 
-        {/* Transfer Content Row */}
         <View style={[styles.bankCopyRow, { backgroundColor: itemBg, borderColor: itemBorder }]}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.bankLabel, { color: subTextColor }]}>Nội dung nạp:</Text>
@@ -572,6 +601,475 @@ const VipPackagesWidget = memo(({ onSelectPackage, isLight }: { onSelectPackage:
 });
 
 /* ═══════════════════════════════════════════════════════════════
+   ADMIN EMBEDDED WIDGETS (Stats, User Mod, Giftcode, Push, Config)
+   ═══════════════════════════════════════════════════════════════ */
+
+// 1. Admin Stats Dashboard Widget
+const AdminStatsWidget = memo(({ isLight }: { isLight: boolean }) => {
+  const [loading, setLoading] = useState(true);
+  const [statsData, setStatsData] = useState({ revenue: 0, totalUsers: 0, totalVips: 0, totalCoins: 0 });
+
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        let tUsers = 0, tVips = 0, tCoins = 0;
+        const now = Date.now();
+        usersSnap.forEach(d => {
+          tUsers++;
+          const data = d.data();
+          tCoins += (data.coins || 0);
+          const exp = data.vipExpire;
+          const ms = exp?.toMillis ? exp.toMillis() : exp?.seconds ? exp.seconds * 1000 : Number(exp) || 0;
+          if (ms > now) tVips++;
+        });
+        if (isMounted) {
+          setStatsData({ revenue: tVips * 50000, totalUsers: tUsers, totalVips: tVips, totalCoins: tCoins });
+          setLoading(false);
+        }
+      } catch (e) {
+        if (isMounted) setLoading(false);
+      }
+    })();
+    return () => { isMounted = false; };
+  }, []);
+
+  const boxBg = isLight ? '#FFFFFF' : 'rgba(0,0,0,0.4)';
+  const boxBorder = isLight ? 'rgba(255,0,85,0.2)' : 'rgba(255,0,85,0.3)';
+  const cardBg = isLight ? '#F9FAFB' : 'rgba(255,255,255,0.05)';
+
+  if (loading) {
+    return (
+      <View style={[styles.widgetBox, { backgroundColor: boxBg, borderColor: boxBorder, padding: 20, alignItems: 'center' }]}>
+        <ActivityIndicator size="small" color="#FF0055" />
+        <Text style={{ color: isLight ? '#111827' : '#FFFFFF', fontSize: 12, marginTop: 6, fontWeight: '700' }}>Đang nạp dữ liệu Admin Dashboard...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.widgetBox, { backgroundColor: boxBg, borderColor: boxBorder }]}>
+      <BlurView intensity={isLight ? 20 : 50} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={['rgba(255,0,85,0.1)', 'rgba(255,119,0,0.04)']} style={StyleSheet.absoluteFill} />
+
+      <View style={styles.widgetHeaderRow}>
+        <LayoutDashboard size={16} color="#FF0055" />
+        <Text style={[styles.widgetTitleText, { color: '#FF0055' }]}>ADMIN REALTIME SYSTEM METRICS</Text>
+      </View>
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+        <View style={[styles.adminStatCard, { backgroundColor: cardBg }]}>
+          <Users size={16} color="#007AFF" />
+          <Text style={styles.adminStatValue}>{statsData.totalUsers.toLocaleString()}</Text>
+          <Text style={styles.adminStatLabel}>Tổng Khách Hàng</Text>
+        </View>
+
+        <View style={[styles.adminStatCard, { backgroundColor: cardBg }]}>
+          <Crown size={16} color={S.amber} />
+          <Text style={[styles.adminStatValue, { color: S.amber }]}>{statsData.totalVips.toLocaleString()}</Text>
+          <Text style={styles.adminStatLabel}>Thành Viên VIP</Text>
+        </View>
+
+        <View style={[styles.adminStatCard, { backgroundColor: cardBg }]}>
+          <Wallet size={16} color={S.emerald} />
+          <Text style={[styles.adminStatValue, { color: S.emerald }]}>{statsData.totalCoins.toLocaleString()} xu</Text>
+          <Text style={styles.adminStatLabel}>Tổng Xu Hệ Thống</Text>
+        </View>
+
+        <View style={[styles.adminStatCard, { backgroundColor: cardBg }]}>
+          <Banknote size={16} color="#FF0055" />
+          <Text style={[styles.adminStatValue, { color: '#FF0055' }]}>{statsData.revenue.toLocaleString()}đ</Text>
+          <Text style={styles.adminStatLabel}>Doanh Thu Ước Tính</Text>
+        </View>
+      </View>
+    </View>
+  );
+});
+
+// 2. Admin User Manager & Coin/VIP Modifier Widget
+const AdminUserEditWidget = memo(({ isLight }: { isLight: boolean }) => {
+  const haptic = useHaptic();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [foundUser, setFoundUser] = useState<any>(null);
+  const [searching, setSearching] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [coinsInput, setCoinsInput] = useState('');
+  const [addDaysInput, setAddDaysInput] = useState('30');
+
+  const handleSearchUser = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    try {
+      const qLower = searchQuery.trim().toLowerCase();
+      const snap = await getDocs(collection(db, 'users'));
+      let match: any = null;
+      snap.forEach(d => {
+        const data = d.data();
+        if (d.id === searchQuery.trim() || data.email?.toLowerCase().includes(qLower) || data.displayName?.toLowerCase().includes(qLower)) {
+          match = { id: d.id, ...data };
+        }
+      });
+
+      if (match) {
+        setFoundUser(match);
+        setCoinsInput(String(match.coins || 0));
+        haptic('success');
+      } else {
+        Alert.alert('Thông báo', 'Không tìm thấy người dùng đúng từ khóa này!');
+        setFoundUser(null);
+      }
+    } catch (e: any) {
+      Alert.alert('Lỗi', e.message);
+    }
+    setSearching(false);
+  };
+
+  const handleUpdateCoins = async (delta: number) => {
+    if (!foundUser) return;
+    const newCoins = Math.max(0, (foundUser.coins || 0) + delta);
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'users', foundUser.id), { coins: newCoins });
+      setFoundUser({ ...foundUser, coins: newCoins });
+      setCoinsInput(String(newCoins));
+      haptic('success');
+      Alert.alert('Thành Công', `Đã cập nhật số dư cho ${foundUser.email || foundUser.id}: ${newCoins.toLocaleString()} xu!`);
+    } catch (e: any) {
+      Alert.alert('Lỗi', e.message);
+    }
+    setSaving(false);
+  };
+
+  const handleAddVipDays = async (days: number) => {
+    if (!foundUser) return;
+    const now = Date.now();
+    const currentExp = foundUser.vipExpire?.toMillis ? foundUser.vipExpire.toMillis() : foundUser.vipExpire?.seconds ? foundUser.vipExpire.seconds * 1000 : Number(foundUser.vipExpire) || 0;
+    const baseTime = currentExp > now ? currentExp : now;
+    const newExpDate = new Date(baseTime + days * 24 * 60 * 60 * 1000);
+
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'users', foundUser.id), { vipExpire: Timestamp.fromDate(newExpDate) });
+      setFoundUser({ ...foundUser, vipExpire: newExpDate });
+      haptic('success');
+      Alert.alert('Thành Công', `Đã cộng thêm ${days} ngày VIP cho ${foundUser.email || foundUser.id}! Hạn mới: ${newExpDate.toLocaleDateString('vi-VN')}`);
+    } catch (e: any) {
+      Alert.alert('Lỗi', e.message);
+    }
+    setSaving(false);
+  };
+
+  const boxBg = isLight ? '#FFFFFF' : 'rgba(0,0,0,0.4)';
+  const boxBorder = isLight ? 'rgba(0,122,255,0.2)' : 'rgba(0,229,255,0.3)';
+  const inputBg = isLight ? '#F3F4F6' : 'rgba(255,255,255,0.06)';
+  const inputBorder = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+  const textColor = isLight ? '#111827' : '#FFFFFF';
+  const subTextColor = isLight ? '#6B7280' : 'rgba(255,255,255,0.55)';
+
+  return (
+    <View style={[styles.widgetBox, { backgroundColor: boxBg, borderColor: boxBorder }]}>
+      <BlurView intensity={isLight ? 20 : 50} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={isLight ? ['rgba(0,122,255,0.05)', 'rgba(52,211,153,0.03)'] : ['rgba(0,229,255,0.08)', 'rgba(52,211,153,0.04)']} style={StyleSheet.absoluteFill} />
+
+      <View style={styles.widgetHeaderRow}>
+        <Users size={16} color={isLight ? '#007AFF' : S.cyan} />
+        <Text style={[styles.widgetTitleText, { color: isLight ? '#007AFF' : S.cyan }]}>ADMIN QUẢN LÝ TÀI KHOẢN KHÁCH HÀNG</Text>
+      </View>
+
+      <View style={[styles.widgetInputRow, { backgroundColor: inputBg, borderColor: inputBorder }]}>
+        <Search size={16} color={subTextColor} />
+        <TextInput
+          style={[styles.widgetTextInput, { color: textColor }]}
+          placeholder="Nhập Email hoặc UID tài khoản cần tìm..."
+          placeholderTextColor={subTextColor}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onSubmitEditing={handleSearchUser}
+        />
+        <TouchableOpacity style={styles.copyBtnPill} onPress={handleSearchUser} disabled={searching}>
+          {searching ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 11 }}>TÌM</Text>}
+        </TouchableOpacity>
+      </View>
+
+      {foundUser && (
+        <View style={{ marginTop: 12, padding: 12, borderRadius: 14, backgroundColor: isLight ? '#F9FAFB' : 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)' }}>
+          <Text style={{ fontSize: 13, fontWeight: '800', color: textColor }}>📧 {foundUser.email || foundUser.id}</Text>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: S.emerald, marginTop: 2 }}>💰 Xu Hiện Tại: {(foundUser.coins || 0).toLocaleString()} xu</Text>
+          
+          <View style={{ flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+            <TouchableOpacity style={[styles.adminActionBtn, { backgroundColor: S.emerald }]} onPress={() => handleUpdateCoins(50000)} disabled={saving}>
+              <Text style={styles.adminActionBtnText}>+50k Xu</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.adminActionBtn, { backgroundColor: S.emerald }]} onPress={() => handleUpdateCoins(100000)} disabled={saving}>
+              <Text style={styles.adminActionBtnText}>+100k Xu</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.adminActionBtn, { backgroundColor: S.amber }]} onPress={() => handleAddVipDays(30)} disabled={saving}>
+              <Text style={styles.adminActionBtnText}>+30 Ngày VIP</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.adminActionBtn, { backgroundColor: S.amber }]} onPress={() => handleAddVipDays(365)} disabled={saving}>
+              <Text style={styles.adminActionBtnText}>+1 Năm VIP</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+});
+
+// 3. Admin Giftcode Generator Widget
+const AdminGiftcodeWidget = memo(({ isLight }: { isLight: boolean }) => {
+  const haptic = useHaptic();
+  const [codeName, setCodeName] = useState('');
+  const [gcType, setGcType] = useState<'coins' | 'vip'>('coins');
+  const [gcValue, setGcValue] = useState('');
+  const [gcLimit, setGcLimit] = useState('100');
+  const [creating, setCreating] = useState(false);
+
+  const handleCreateGiftcode = async () => {
+    if (!codeName.trim() || !gcValue.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập Tên Mã và Giá Trị Giftcode!');
+      return;
+    }
+    setCreating(true);
+    try {
+      const codeUpper = codeName.trim().toUpperCase();
+      await setDoc(doc(db, 'giftcodes', codeUpper), {
+        type: gcType,
+        value: Number(gcValue) || 0,
+        limit: Number(gcLimit) || 100,
+        usedCount: 0,
+        createdAt: serverTimestamp(),
+      });
+      haptic('success');
+      Alert.alert('Tạo Thành Công', `Mã Giftcode "${codeUpper}" (${gcType.toUpperCase()}: ${gcValue}) đã được tạo!`);
+      setCodeName('');
+      setGcValue('');
+    } catch (e: any) {
+      Alert.alert('Lỗi', e.message);
+    }
+    setCreating(false);
+  };
+
+  const boxBg = isLight ? '#FFFFFF' : 'rgba(0,0,0,0.4)';
+  const boxBorder = isLight ? 'rgba(251,191,36,0.2)' : 'rgba(251,191,36,0.3)';
+  const inputBg = isLight ? '#F3F4F6' : 'rgba(255,255,255,0.06)';
+  const inputBorder = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+  const textColor = isLight ? '#111827' : '#FFFFFF';
+  const subTextColor = isLight ? '#6B7280' : 'rgba(255,255,255,0.55)';
+
+  return (
+    <View style={[styles.widgetBox, { backgroundColor: boxBg, borderColor: boxBorder }]}>
+      <BlurView intensity={isLight ? 20 : 50} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={isLight ? ['rgba(251,191,36,0.05)', 'rgba(255,119,0,0.03)'] : ['rgba(251,191,36,0.08)', 'rgba(255,119,0,0.04)']} style={StyleSheet.absoluteFill} />
+
+      <View style={styles.widgetHeaderRow}>
+        <Ticket size={16} color={S.amber} />
+        <Text style={[styles.widgetTitleText, { color: S.amber }]}>ADMIN TẠO GIFTCODE TẶNG XU / VIP</Text>
+      </View>
+
+      <View style={{ gap: 8, marginTop: 6 }}>
+        <View style={[styles.widgetInputRow, { backgroundColor: inputBg, borderColor: inputBorder }]}>
+          <Ticket size={16} color={subTextColor} />
+          <TextInput
+            style={[styles.widgetTextInput, { color: textColor }]}
+            placeholder="Tên Mã Giftcode (VD: TRIAN2026)..."
+            placeholderTextColor={subTextColor}
+            value={codeName}
+            onChangeText={setCodeName}
+            autoCapitalize="characters"
+          />
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={[styles.adminTypeChip, { backgroundColor: gcType === 'coins' ? S.amber : inputBg, borderColor: inputBorder }]}
+            onPress={() => setGcType('coins')}
+          >
+            <Text style={{ color: gcType === 'coins' ? '#000000' : textColor, fontWeight: '800', fontSize: 12 }}>Tặng Xu</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.adminTypeChip, { backgroundColor: gcType === 'vip' ? S.amber : inputBg, borderColor: inputBorder }]}
+            onPress={() => setGcType('vip')}
+          >
+            <Text style={{ color: gcType === 'vip' ? '#000000' : textColor, fontWeight: '800', fontSize: 12 }}>Tặng Ngày VIP</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={[styles.widgetInputRow, { flex: 1, backgroundColor: inputBg, borderColor: inputBorder }]}>
+            <TextInput
+              style={[styles.widgetTextInput, { color: textColor }]}
+              placeholder={gcType === 'coins' ? 'Số Xu (VD: 50000)' : 'Số Ngày (VD: 30)'}
+              placeholderTextColor={subTextColor}
+              value={gcValue}
+              onChangeText={setGcValue}
+              keyboardType="numeric"
+            />
+          </View>
+          <View style={[styles.widgetInputRow, { width: 100, backgroundColor: inputBg, borderColor: inputBorder }]}>
+            <TextInput
+              style={[styles.widgetTextInput, { color: textColor }]}
+              placeholder="Giới hạn"
+              placeholderTextColor={subTextColor}
+              value={gcLimit}
+              onChangeText={setGcLimit}
+              keyboardType="numeric"
+            />
+          </View>
+        </View>
+
+        <TouchableOpacity style={[styles.widgetSubmitBtn, { marginTop: 8 }]} onPress={handleCreateGiftcode} disabled={creating}>
+          <LinearGradient colors={['#FBBF24', '#F59E0B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          {creating ? <ActivityIndicator size="small" color="#000000" /> : <>
+            <Ticket size={14} color="#000000" />
+            <Text style={[styles.widgetSubmitBtnText, { color: '#000000' }]}>TẠO MÃ GIFTCODE NGAY</Text>
+          </>}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+// 4. Admin Push Notification Broadcast Widget
+const AdminPushWidget = memo(({ isLight }: { isLight: boolean }) => {
+  const haptic = useHaptic();
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [url, setUrl] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const handleSendPush = async () => {
+    if (!title.trim() || !body.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập Tiêu Đề và Nội Dung Thông Báo!');
+      return;
+    }
+    setSending(true);
+    try {
+      const res = await fetch(`${SCRIPT_URL}?action=send_push&title=${encodeURIComponent(title.trim())}&body=${encodeURIComponent(body.trim())}&url=${encodeURIComponent(url.trim())}`);
+      const json = await res.json();
+      haptic('success');
+      Alert.alert('Thành Công', 'Đã phát sóng thông báo PUSH tới tất cả thiết bị trên hệ thống!');
+      setTitle('');
+      setBody('');
+      setUrl('');
+    } catch (e: any) {
+      Alert.alert('Thông báo', 'Đã gửi lệnh phát sóng thông báo đẩy!');
+    }
+    setSending(false);
+  };
+
+  const boxBg = isLight ? '#FFFFFF' : 'rgba(0,0,0,0.4)';
+  const boxBorder = isLight ? 'rgba(167,139,250,0.2)' : 'rgba(167,139,250,0.3)';
+  const inputBg = isLight ? '#F3F4F6' : 'rgba(255,255,255,0.06)';
+  const inputBorder = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+  const textColor = isLight ? '#111827' : '#FFFFFF';
+  const subTextColor = isLight ? '#6B7280' : 'rgba(255,255,255,0.55)';
+
+  return (
+    <View style={[styles.widgetBox, { backgroundColor: boxBg, borderColor: boxBorder }]}>
+      <BlurView intensity={isLight ? 20 : 50} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={isLight ? ['rgba(167,139,250,0.05)', 'rgba(0,122,255,0.03)'] : ['rgba(167,139,250,0.08)', 'rgba(0,229,255,0.04)']} style={StyleSheet.absoluteFill} />
+
+      <View style={styles.widgetHeaderRow}>
+        <Bell size={16} color={S.violet} />
+        <Text style={[styles.widgetTitleText, { color: S.violet }]}>ADMIN PHÁT SÓNG THÔNG BÁO PUSH HỆ THỐNG</Text>
+      </View>
+
+      <View style={{ gap: 8, marginTop: 6 }}>
+        <View style={[styles.widgetInputRow, { backgroundColor: inputBg, borderColor: inputBorder }]}>
+          <TextInput
+            style={[styles.widgetTextInput, { color: textColor }]}
+            placeholder="Tiêu đề thông báo..."
+            placeholderTextColor={subTextColor}
+            value={title}
+            onChangeText={setTitle}
+          />
+        </View>
+
+        <View style={[styles.widgetInputRow, { backgroundColor: inputBg, borderColor: inputBorder, height: 60 }]}>
+          <TextInput
+            style={[styles.widgetTextInput, { color: textColor }]}
+            placeholder="Nội dung thông báo chi tiết..."
+            placeholderTextColor={subTextColor}
+            value={body}
+            onChangeText={setBody}
+            multiline
+          />
+        </View>
+
+        <TouchableOpacity style={styles.widgetSubmitBtn} onPress={handleSendPush} disabled={sending}>
+          <LinearGradient colors={['#A78BFA', '#7C3AED']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          {sending ? <ActivityIndicator size="small" color="#FFFFFF" /> : <>
+            <Bell size={14} color="#FFFFFF" />
+            <Text style={[styles.widgetSubmitBtnText, { color: '#FFFFFF' }]}>GỬI THÔNG BÁO PUSH TỚI TẤT CẢ MÁY</Text>
+          </>}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+// 5. Admin System Maintenance Toggle Widget
+const AdminSysConfigWidget = memo(({ isLight }: { isLight: boolean }) => {
+  const haptic = useHaptic();
+  const [maintenance, setMaintenance] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'settings', 'config'));
+        if (snap.exists()) {
+          setMaintenance(snap.data().maintenanceShow || false);
+        }
+      } catch {}
+    })();
+  }, []);
+
+  const handleToggleMaintenance = async (val: boolean) => {
+    setMaintenance(val);
+    setSaving(true);
+    try {
+      await setDoc(doc(db, 'settings', 'config'), { maintenanceShow: val }, { merge: true });
+      haptic(val ? 'warning' : 'success');
+      Alert.alert('Cấu Hình Hệ Thống', val ? '🚨 Đã BẬT chế độ BẢO TRÌ toàn hệ thống!' : '✅ Đã TẮT bảo trì, hệ thống hoạt động bình thường.');
+    } catch (e: any) {
+      Alert.alert('Lỗi', e.message);
+    }
+    setSaving(false);
+  };
+
+  const boxBg = isLight ? '#FFFFFF' : 'rgba(0,0,0,0.4)';
+  const boxBorder = maintenance ? 'rgba(255,0,85,0.4)' : (isLight ? 'rgba(52,211,153,0.2)' : 'rgba(52,211,153,0.3)');
+  const textColor = isLight ? '#111827' : '#FFFFFF';
+
+  return (
+    <View style={[styles.widgetBox, { backgroundColor: boxBg, borderColor: boxBorder }]}>
+      <BlurView intensity={isLight ? 20 : 50} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={maintenance ? ['rgba(255,0,85,0.1)', 'rgba(255,119,0,0.04)'] : ['rgba(52,211,153,0.08)', 'rgba(0,229,255,0.04)']} style={StyleSheet.absoluteFill} />
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Wrench size={18} color={maintenance ? '#FF0055' : S.emerald} />
+          <View>
+            <Text style={{ fontSize: 13, fontWeight: '900', color: maintenance ? '#FF0055' : S.emerald }}>BẢO TRÌ HỆ THỐNG TOÀN DIỆN</Text>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: textColor, marginTop: 2 }}>{maintenance ? 'Trạng thái: ĐANG BẢO TRÌ' : 'Trạng thái: HOẠT ĐỘNG BÌNH THƯỜNG'}</Text>
+          </View>
+        </View>
+
+        <Switch
+          value={maintenance}
+          onValueChange={handleToggleMaintenance}
+          trackColor={{ false: 'rgba(255,255,255,0.2)', true: '#FF0055' }}
+          thumbColor="#FFFFFF"
+        />
+      </View>
+    </View>
+  );
+});
+
+/* ═══════════════════════════════════════════════════════════════
    LIQUID INPUT — Floating Glass Bar
    ═══════════════════════════════════════════════════════════════ */
 
@@ -633,7 +1131,7 @@ const LiquidInput = memo(({ value, onChangeText, onSubmit, onFocusChange, isLigh
       />
       <TextInput
         style={[styles.liquidInput, { color: isLight ? '#111827' : '#FFFFFF' }]}
-        placeholder="Yêu cầu AI bất kỳ điều gì (gõ 'ipa youtube', 'nạp xu', 'chứng chỉ')..."
+        placeholder="Yêu cầu AI bất kỳ điều gì (gõ 'ipa youtube', 'bật admin', 'doanh thu')..."
         placeholderTextColor={isLight ? '#9CA3AF' : 'rgba(255,255,255,0.30)'}
         value={value}
         onChangeText={onChangeText}
@@ -914,6 +1412,26 @@ const MessageEntity = memo(({
         <VipPackagesWidget onSelectPackage={onSelectVipPkg} isLight={isLight} />
       )}
 
+      {message.widgetType === 'admin_stats' && (
+        <AdminStatsWidget isLight={isLight} />
+      )}
+
+      {message.widgetType === 'admin_users' && (
+        <AdminUserEditWidget isLight={isLight} />
+      )}
+
+      {message.widgetType === 'admin_giftcode' && (
+        <AdminGiftcodeWidget isLight={isLight} />
+      )}
+
+      {message.widgetType === 'admin_push' && (
+        <AdminPushWidget isLight={isLight} />
+      )}
+
+      {message.widgetType === 'admin_config' && (
+        <AdminSysConfigWidget isLight={isLight} />
+      )}
+
       {message.appCards && message.appCards.length > 0 && (
         <ScrollView
           horizontal
@@ -951,7 +1469,7 @@ const MessageEntity = memo(({
 });
 
 /* ═══════════════════════════════════════════════════════════════
-   SMART AUTONOMOUS INTENT ENGINE
+   SMART AUTONOMOUS INTENT ENGINE (WITH ADMIN POWERS)
    ═══════════════════════════════════════════════════════════════ */
 
 function removeAccents(str: string) {
@@ -963,11 +1481,70 @@ interface ProcessResult {
   actions: CommandAction[];
   appCards?: AppItem[];
   intent: IntentType;
-  widgetType?: 'cert_import' | 'bank_deposit' | 'vip_packages' | 'app_search';
+  widgetType?: 'cert_import' | 'bank_deposit' | 'vip_packages' | 'app_search' | 'admin_stats' | 'admin_users' | 'admin_giftcode' | 'admin_push' | 'admin_config';
 }
 
-const processSmartIntent = (raw: string, apps: AppItem[], userEmail?: string): ProcessResult => {
+const processSmartIntent = (raw: string, apps: AppItem[], userEmail?: string, isAdminMode?: boolean): ProcessResult => {
   const t = removeAccents(raw);
+
+  // Admin Mode Commands when Admin Mode is ON
+  if (isAdminMode) {
+    if (t.includes('thong ke') || t.includes('doanh thu') || t.includes('dashboard') || t.includes('tong quan')) {
+      return {
+        text: `⚡ **ADMIN DASHBOARD REALTIME**\n\nDạ đây là bảng chỉ số thống kê thời gian thực của toàn bộ hệ thống IPAVIET:`,
+        widgetType: 'admin_stats',
+        actions: [
+          { label: '👥 Sửa Xu / VIP Khách Hàng', route: '/admin', style: 'primary' },
+          { label: '🎟️ Tạo Mã Giftcode', route: '/admin', style: 'secondary' },
+        ],
+        intent: 'admin_stats',
+      };
+    }
+
+    if (t.includes('khach hang') || t.includes('sua user') || t.includes('cong xu') || t.includes('them vip') || t.includes('quan ly user')) {
+      return {
+        text: `⚡ **ADMIN USER MANAGER**\n\nSếp nhập Email hoặc UID khách hàng bên dưới để tìm và cộng Xu/VIP tự động nhé!`,
+        widgetType: 'admin_users',
+        actions: [
+          { label: '🛠️ Mở Trang Admin Chi Tiết', route: '/admin', style: 'primary' },
+        ],
+        intent: 'admin_users',
+      };
+    }
+
+    if (t.includes('giftcode') || t.includes('ma giam gia') || t.includes('tao giftcode')) {
+      return {
+        text: `⚡ **ADMIN GIFTCODE GENERATOR**\n\nSếp nhập tên mã giftcode và số xu / số ngày VIP tặng bên dưới để phát hành mã ngay lập tức:`,
+        widgetType: 'admin_giftcode',
+        actions: [
+          { label: '🎟️ Xem Tất Cả Mã Giftcode', route: '/admin', style: 'secondary' },
+        ],
+        intent: 'admin_giftcode',
+      };
+    }
+
+    if (t.includes('push') || t.includes('thong bao') || t.includes('gui push') || t.includes('gui tin')) {
+      return {
+        text: `⚡ **ADMIN PUSH BROADCAST SYSTEM**\n\nSếp nhập nội dung thông báo bên dưới để phát sóng tin nhắn PUSH tới tất cả ứng dụng trên thiết bị khách hàng:`,
+        widgetType: 'admin_push',
+        actions: [
+          { label: '🔔 Trang Thông Báo Admin', route: '/admin', style: 'secondary' },
+        ],
+        intent: 'admin_push',
+      };
+    }
+
+    if (t.includes('bao tri') || t.includes('cau hinh') || t.includes('he thong')) {
+      return {
+        text: `⚡ **ADMIN SYSTEM CONFIGURATION**\n\nCông tắc bật/tắt bảo trì hệ thống toàn diện:`,
+        widgetType: 'admin_config',
+        actions: [
+          { label: '⚙️ Cài Đặt Chi Tiết', route: '/admin', style: 'primary' },
+        ],
+        intent: 'admin_config',
+      };
+    }
+  }
 
   // Newbie / Certificate Guide -> Embedded Cert Import Form Widget
   if (t.includes('nguoi moi') || t.includes('moi dung') || t.includes('khong biet') || t.includes('chi toi') || t.includes('cert') || t.includes('p12') || t.includes('huong dan')) {
@@ -1074,6 +1651,7 @@ export default function AiSupportScreen() {
   const [orbState, setOrbState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [apps, setApps] = useState<AppItem[]>([]);
+  const [isAdminMode, setIsAdminMode] = useState(false);
 
   const isLight = COLORS.background === '#F4F4F6' || COLORS.background === '#FFFFFF' || COLORS.text === '#000000';
 
@@ -1111,9 +1689,49 @@ export default function AiSupportScreen() {
     }, 150);
   }, []);
 
+  const handleToggleAdminMode = useCallback(() => {
+    if (!userState.isAdmin) {
+      haptic('error');
+      Alert.alert(
+        '⚠️ Hạn Chế Quyền Hạn',
+        'Rất tiếc! Quyền Admin Mode chỉ dành riêng cho Quản Trị Viên hệ thống IPAVIET (Email Admin: mquitran@gmail.com).'
+      );
+      return;
+    }
+
+    const nextMode = !isAdminMode;
+    setIsAdminMode(nextMode);
+    haptic(nextMode ? 'heavy' : 'medium');
+
+    const adminNoticeMsg: IntelligenceMessage = {
+      id: Date.now().toString(),
+      sender: 'intelligence',
+      text: nextMode
+        ? `⚡ **ĐÃ BẬT CHẾ ĐỘ ADMIN MODE!**\n\nXin chào Sếp Admin! Em đã kích hoạt toàn bộ bộ công cụ Quản Trị Hệ Thống. Sếp có thể xem thống kê doanh thực, cộng xu, gia hạn VIP, phát hành Giftcode và gửi Push ngay trong màn hình chat này!`
+        : `✅ **Đã tắt Chế độ Admin Mode.** Đã quay về giao diện Trợ Lý AI người dùng thông thường.`,
+      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      widgetType: nextMode ? 'admin_stats' : undefined,
+      actions: nextMode ? [
+        { label: '👥 Quản Lý Khách Hàng', route: '/admin', style: 'primary' },
+        { label: '🎟️ Tạo Giftcode', route: '/admin', style: 'secondary' },
+        { label: '🔔 Gửi Push Broadcast', route: '/admin', style: 'secondary' },
+      ] : undefined,
+    };
+
+    setMessages((prev) => [...prev, adminNoticeMsg]);
+    scrollToBottom();
+  }, [userState, isAdminMode, haptic, scrollToBottom]);
+
   const handleSendText = useCallback(
     (textToSend: string) => {
       if (!textToSend.trim()) return;
+
+      const rawT = removeAccents(textToSend);
+      if (rawT === 'bat admin' || rawT === 'admin mode' || rawT === 'admin' || rawT === 'mode admin') {
+        handleToggleAdminMode();
+        setInputText('');
+        return;
+      }
 
       const userMsg: IntelligenceMessage = {
         id: Date.now().toString(),
@@ -1128,7 +1746,7 @@ export default function AiSupportScreen() {
       scrollToBottom();
 
       setTimeout(() => {
-        const res = processSmartIntent(textToSend, apps, userState.user?.email);
+        const res = processSmartIntent(textToSend, apps, userState.user?.email, isAdminMode);
         const botMsg: IntelligenceMessage = {
           id: (Date.now() + 1).toString(),
           sender: 'intelligence',
@@ -1149,7 +1767,7 @@ export default function AiSupportScreen() {
         }, 2000);
       }, 700);
     },
-    [apps, userState, scrollToBottom]
+    [apps, userState, isAdminMode, handleToggleAdminMode, scrollToBottom]
   );
 
   const handleSend = useCallback(() => {
@@ -1224,17 +1842,22 @@ export default function AiSupportScreen() {
     setOrbState('idle');
   }, [haptic]);
 
-  const suggestions = [
+  const suggestions = isAdminMode ? [
+    { label: '📊 Thống kê doanh thu', query: 'thong ke doanh thu', icon: <LayoutDashboard size={15} color="#FF0055" /> },
+    { label: '👥 Sửa Xu/VIP User', query: 'quan ly khach hang', icon: <Users size={15} color="#007AFF" /> },
+    { label: '🎟️ Tạo Giftcode', query: 'tao giftcode', icon: <Ticket size={15} color="#FBBF24" /> },
+    { label: '🔔 Gửi Push Broadcast', query: 'gui push thong bao', icon: <Bell size={15} color="#A78BFA" /> },
+    { label: '🛠️ Cấu hình bảo trì', query: 'bao tri he thong', icon: <Wrench size={15} color="#34D399" /> },
+  ] : [
     { label: 'Hướng dẫn người mới', query: 'huong dan nguoi moi nap cert', icon: <HelpCircle size={15} color={isLight ? '#007AFF' : '#00E5FF'} /> },
     { label: 'Tìm ứng dụng IPA', query: 'tim ung dung ipa', icon: <Sparkles size={15} color={isLight ? '#7C3AED' : '#A78BFA'} /> },
     { label: 'Thẻ nạp xu ACB', query: 'nap xu bank acb', icon: <Wallet size={15} color="#34D399" /> },
     { label: 'Bảng giá VIP', query: 'gia han vip', icon: <Crown size={15} color="#FBBF24" /> },
     { label: 'Lỗi app văng', query: 'loi chung chi app crash', icon: <AlertTriangle size={15} color="#FB7185" /> },
-    { label: 'Admin hỗ trợ', query: 'lien he zalo admin', icon: <MessageSquare size={15} color="#60A5FA" /> },
   ];
 
   const headerBg = isLight ? 'rgba(255,255,255,0.85)' : 'rgba(12,12,18,0.85)';
-  const headerBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+  const headerBorder = isAdminMode ? 'rgba(255,0,85,0.3)' : (isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)');
   const headerText = isLight ? '#111827' : '#FFFFFF';
   const headerSubText = isLight ? '#6B7280' : 'rgba(255,255,255,0.55)';
   const btnBg = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)';
@@ -1260,16 +1883,38 @@ export default function AiSupportScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={[styles.headerTitleText, { color: headerText }]}>IPAVIET Autonomous AI</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.headerTitleText, { color: headerText }]}>IPAVIET Autonomous AI</Text>
+              {isAdminMode && (
+                <View style={{ backgroundColor: '#FF0055', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '900' }}>ADMIN MODE</Text>
+                </View>
+              )}
+            </View>
             <View style={styles.statusChip}>
-              <View style={[styles.statusDot, { backgroundColor: S.emerald }]} />
-              <Text style={[styles.statusText, { color: headerSubText }]}>{userState.user ? userState.user.email : 'Autonomous OS 2026'}</Text>
+              <View style={[styles.statusDot, { backgroundColor: isAdminMode ? '#FF0055' : S.emerald }]} />
+              <Text style={[styles.statusText, { color: headerSubText }]}>
+                {isAdminMode ? 'System Super Admin Control' : (userState.user ? userState.user.email : 'Autonomous OS 2026')}
+              </Text>
             </View>
           </View>
 
-          <TouchableOpacity style={[styles.iconCircleBtn, { backgroundColor: btnBg, borderColor: btnBorder }]} onPress={resetChat} activeOpacity={0.8}>
-            <RotateCcw size={16} color={headerSubText} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {/* Admin Toggle Button for Admin User */}
+            {userState.isAdmin && (
+              <TouchableOpacity
+                style={[styles.iconCircleBtn, { backgroundColor: isAdminMode ? '#FF0055' : btnBg, borderColor: isAdminMode ? '#FF0055' : btnBorder }]}
+                onPress={handleToggleAdminMode}
+                activeOpacity={0.8}
+              >
+                {isAdminMode ? <Unlock size={16} color="#FFFFFF" /> : <Lock size={16} color={headerSubText} />}
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={[styles.iconCircleBtn, { backgroundColor: btnBg, borderColor: btnBorder }]} onPress={resetChat} activeOpacity={0.8}>
+              <RotateCcw size={16} color={headerSubText} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -1284,14 +1929,17 @@ export default function AiSupportScreen() {
           <Animated.View style={animatedScrollPaddingStyle}>
             {/* Energy Orb Header */}
             <View style={styles.orbHeaderBox}>
-              <EnergyOrb state={orbState} isLight={isLight} />
+              <EnergyOrb state={orbState} isLight={isLight} isAdminMode={isAdminMode} />
               {messages.length === 0 && (
                 <View style={styles.heroTextBox}>
                   <Text style={[styles.heroTitleText, { color: isLight ? '#111827' : '#FFFFFF' }]}>
-                    Xin chào, <Text style={{ color: isLight ? '#007AFF' : S.cyan }}>{userState.user?.displayName || 'Sếp'}</Text>
+                    {isAdminMode ? '⚡ ADMIN COMMAND CENTER' : <>Xin chào, <Text style={{ color: isLight ? '#007AFF' : S.cyan }}>{userState.user?.displayName || 'Sếp'}</Text></>}
                   </Text>
                   <Text style={[styles.heroSubText, { color: isLight ? '#4B5563' : 'rgba(255,255,255,0.55)' }]}>
-                    Em là Autonomous AI. Em có thể tự động ký App, tạo thẻ nạp xu ACB, hướng dẫn nạp P12 và tìm IPA Mod cho sếp.
+                    {isAdminMode
+                      ? 'Em đã sẵn sàng thực thi toàn bộ quyền Admin: xem thống kê doanh thu, cộng xu, gia hạn VIP, phát hành giftcode và phát sóng thông báo PUSH.'
+                      : 'Em là Autonomous AI. Em có thể tự động ký App, tạo thẻ nạp xu ACB, hướng dẫn nạp P12 và tìm IPA Mod cho sếp.'
+                    }
                   </Text>
                 </View>
               )}
@@ -1726,6 +2374,43 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '900',
     color: '#000000',
+  },
+
+  // Admin Custom Widgets
+  adminStatCard: {
+    width: '48%',
+    padding: 12,
+    borderRadius: 14,
+    gap: 4,
+  },
+  adminStatValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#007AFF',
+    marginTop: 2,
+  },
+  adminStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#9CA3AF',
+  },
+  adminActionBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  adminActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  adminTypeChip: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   // App Cards Row
