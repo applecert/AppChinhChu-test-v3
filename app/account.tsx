@@ -286,7 +286,7 @@ export default function AccountScreen() {
   };
 
   const handleAuth = async () => {
-    if (!email || !password || (isRegisterMode && !fullname)) return Alert.alert(TXT.errorLabel, TXT.langName === 'English' ? 'Please fill in all fields!' : 'Nhập đủ thông tin!');
+    if (!email || !password || (isRegisterMode && !fullname)) return Alert.alert(TXT.errorLabel, TXT.langName === 'English' ? 'Please fill in all fields!' : 'Vui lòng nhập đủ thông tin!');
     
     // Tactile animation scale down & up
     Animated.sequence([
@@ -295,30 +295,31 @@ export default function AccountScreen() {
     ]).start();
 
     setIsLoading(true);
+    const cleanEmail = email.trim().toLowerCase();
+
     try {
       if (isRegisterMode) {
         if (captchaTimeoutRef.current) clearTimeout(captchaTimeoutRef.current);
         console.log("[Register] Initializing background Turnstile verification...");
         setCaptchaState('checking');
         
-        // Start 2.5s timer. If Turnstile resolves passively before this, we proceed silently.
-        // If not, we fall back to displaying the interactive challenge Modal.
         captchaTimeoutRef.current = setTimeout(() => {
           console.log("[Register] Turnstile did not resolve passively within 2.5s. Showing interactive Modal.");
           setCaptchaState('interactive');
         }, 2500);
       } else {
-        const cleanEmail = email.trim();
+        console.log("[Login] Signing in with email:", cleanEmail);
         await signInWithEmailAndPassword(auth, cleanEmail, password);
+        console.log("[Login] Firebase auth success!");
       }
     } catch (error: any) {
       console.error("[Login Error]:", error?.code, error?.message);
       let msg = error?.message || 'Đăng nhập không thành công!';
       if (error?.code === 'auth/invalid-email') msg = 'Email không đúng định dạng!';
-      if (error?.code === 'auth/user-not-found') msg = 'Tài khoản này chưa tồn tại. Vui lòng đăng ký!';
-      if (error?.code === 'auth/wrong-password' || error?.code === 'auth/invalid-credential') msg = 'Sai mật khẩu hoặc thông tin đăng nhập!';
+      if (error?.code === 'auth/user-not-found' || error?.code === 'auth/invalid-credential') msg = 'Email hoặc mật khẩu không chính xác!';
+      if (error?.code === 'auth/wrong-password') msg = 'Mật khẩu không chính xác!';
       if (error?.code === 'auth/too-many-requests') msg = 'Tài khoản bị tạm khóa do thử sai nhiều lần. Vui lòng thử lại sau 1 phút!';
-      if (error?.code === 'auth/network-request-failed') msg = 'Không có kết nối mạng!';
+      if (error?.code === 'auth/network-request-failed') msg = 'Lỗi kết nối mạng!';
       Alert.alert(TXT.errorLabel, msg);
     } finally {
       if (!isRegisterMode) setIsLoading(false);
