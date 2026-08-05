@@ -308,19 +308,18 @@ export default function AccountScreen() {
           setCaptchaState('interactive');
         }, 2500);
       } else {
-        console.log("[Login] Signing in with email:", cleanEmail);
+        const cleanEmail = email.trim();
+        console.log("[Login] Attempting sign-in for email:", cleanEmail);
         await signInWithEmailAndPassword(auth, cleanEmail, password);
-        console.log("[Login] Firebase auth success!");
-        Alert.alert("Thành Công", "Đăng nhập thành công!");
+        console.log("[Login] Firebase auth successful!");
       }
     } catch (error: any) {
       console.error("[Login Error]:", error?.code, error?.message);
-      let msg = error?.message || 'Đăng nhập không thành công!';
-      if (error?.code === 'auth/invalid-email') msg = 'Email không đúng định dạng!';
-      if (error?.code === 'auth/user-not-found' || error?.code === 'auth/invalid-credential') msg = 'Email hoặc mật khẩu không chính xác!';
-      if (error?.code === 'auth/wrong-password') msg = 'Mật khẩu không chính xác!';
-      if (error?.code === 'auth/too-many-requests') msg = 'Tài khoản bị tạm khóa do thử sai nhiều lần. Vui lòng thử lại sau 1 phút!';
-      if (error?.code === 'auth/network-request-failed') msg = 'Lỗi kết nối mạng!';
+      let msg = error?.message || 'Đăng nhập thất bại!';
+      if (error?.code === 'auth/invalid-email') msg = 'Email không hợp lệ!';
+      if (error?.code === 'auth/user-not-found' || error?.code === 'auth/invalid-credential') msg = 'Email hoặc mật khẩu không đúng!';
+      if (error?.code === 'auth/wrong-password') msg = 'Mật khẩu không đúng!';
+      if (error?.code === 'auth/too-many-requests') msg = 'Đã thử sai nhiều lần, vui lòng đợi 1 phút!';
       Alert.alert(TXT.errorLabel, msg);
     } finally {
       if (!isRegisterMode) setIsLoading(false);
@@ -334,27 +333,27 @@ export default function AccountScreen() {
         const { signInWithPopup } = require('firebase/auth');
         const provider = new GoogleAuthProvider();
         await signInWithPopup(auth, provider);
-        Alert.alert("Thành Công", "Đăng nhập Google thành công!");
       } else {
         const redirectUrl = Linking.createURL('/account');
+        console.log("[Google Auth] Redirect URL:", redirectUrl);
         const authUrl = `https://ipaviet.site/login-app.html?redirect_uri=${encodeURIComponent(redirectUrl)}`;
         const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
+        console.log("[Google Auth] Result:", JSON.stringify(result));
 
         if (result.type === 'success' && result.url) {
           const parsed = Linking.parse(result.url);
           const token = (parsed.queryParams?.idToken || parsed.queryParams?.token) as string;
+          console.log("[Google Auth] Received token:", token ? token.substring(0, 15) + '...' : 'null');
           if (token) {
             try {
               const credential = GoogleAuthProvider.credential(token);
               await signInWithCredential(auth, credential);
-              Alert.alert("Thành Công", "Đăng nhập Google thành công!");
             } catch (credError: any) {
               try {
                 await signInWithCustomToken(auth, token);
-                Alert.alert("Thành Công", "Đăng nhập Google thành công!");
               } catch (customErr) {
                 console.error("Token auth failed:", customErr);
-                Alert.alert("Lỗi", "Không thể xác thực token Google.");
+                Alert.alert("Lỗi", "Không thể xác thực Token Google.");
               }
             }
           }
@@ -362,12 +361,7 @@ export default function AccountScreen() {
       }
     } catch (error: any) {
       console.error("[Google Sign-In Error]:", error);
-      Alert.alert(
-        TXT.errorLabel,
-        TXT.langName === 'English'
-          ? 'Google Sign-In failed: ' + (error?.message || error)
-          : 'Đăng nhập Google thất bại: ' + (error?.message || error)
-      );
+      Alert.alert(TXT.errorLabel, 'Đăng nhập Google thất bại: ' + (error?.message || error));
     } finally {
       setIsLoading(false);
     }

@@ -18,22 +18,15 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 let auth: any;
 
-try {
-  if (Platform.OS === 'web') {
-    auth = getAuth(app);
-  } else {
-    try {
-      // @ts-ignore
-      const { getReactNativePersistence } = require('firebase/auth');
-      auth = initializeAuth(app, {
-        persistence: getReactNativePersistence(AsyncStorage)
-      });
-    } catch (e) {
-      auth = getAuth(app);
-    }
-  }
-} catch (err) {
+if (Platform.OS === 'web') {
   auth = getAuth(app);
+} else {
+  // Ép ẩn hàm này khỏi Web để không bị màn hình đỏ
+  // @ts-ignore
+  const { getReactNativePersistence } = require('firebase/auth');
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+  });
 }
 
 export { auth };
