@@ -186,6 +186,9 @@ const useUserState = () => {
           } else {
             setState({ user: u, coins: 0, vipStatus: 'Chưa đăng ký', isVIP: false, isAdmin: isAdminEmail });
           }
+        }, (err) => {
+          console.warn("User doc listener error:", err);
+          setState({ user: u, coins: 0, vipStatus: 'Chưa đăng ký', isVIP: false, isAdmin: isAdminEmail });
         });
       } else {
         setState({ user: null, coins: 0, vipStatus: 'Chưa đăng nhập', isVIP: false, isAdmin: false });
