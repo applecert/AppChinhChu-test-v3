@@ -793,61 +793,82 @@ export default function AiSupportScreen() {
     }, 150);
   }, []);
 
-  const handleSend = useCallback(() => {
-    if (!inputText.trim()) return;
+  const handleSendText = useCallback(
+    (textToSend: string) => {
+      if (!textToSend.trim()) return;
 
-    const userMsg: IntelligenceMessage = {
-      id: Date.now().toString(),
-      sender: 'user',
-      text: inputText.trim(),
-      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setMessages((prev) => [...prev, userMsg]);
-    const inputCopy = inputText.trim();
-    setInputText('');
-    setOrbState('thinking');
-    scrollToBottom();
-
-    setTimeout(() => {
-      const res = processIntent(inputCopy, apps, userState.user?.email);
-      const botMsg: IntelligenceMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: 'intelligence',
-        text: res.text,
+      const userMsg: IntelligenceMessage = {
+        id: Date.now().toString(),
+        sender: 'user',
+        text: textToSend.trim(),
         timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        actions: res.actions,
-        appCards: res.appCards,
-        intent: res.intent,
       };
 
-      setOrbState('speaking');
-      setMessages((prev) => [...prev, botMsg]);
+      setMessages((prev) => [...prev, userMsg]);
+      setInputText('');
+      setOrbState('thinking');
       scrollToBottom();
 
       setTimeout(() => {
-        setOrbState('idle');
-      }, 2000);
-    }, 800);
-  }, [inputText, apps, userState, scrollToBottom]);
+        const res = processIntent(textToSend, apps, userState.user?.email);
+        const botMsg: IntelligenceMessage = {
+          id: (Date.now() + 1).toString(),
+          sender: 'intelligence',
+          text: res.text,
+          timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          actions: res.actions,
+          appCards: res.appCards,
+          intent: res.intent,
+        };
 
-  const handleAction = useCallback((act: CommandAction) => {
-    if (act.route) {
-      router.push(act.route as any);
-    } else if (act.actionType === 'zalo') {
-      Alert.alert('Liên hệ Admin', 'Zalo Kỹ Thuật IPAVIET: 0987.xxx.xxx');
-    }
-  }, [router]);
+        setOrbState('speaking');
+        setMessages((prev) => [...prev, botMsg]);
+        scrollToBottom();
 
-  const handleAppPress = useCallback((id: string) => {
-    router.push(`/details/${id}` as any);
-  }, [router]);
+        setTimeout(() => {
+          setOrbState('idle');
+        }, 2000);
+      }, 700);
+    },
+    [apps, userState, scrollToBottom]
+  );
+
+  const handleSend = useCallback(() => {
+    handleSendText(inputText);
+  }, [inputText, handleSendText]);
+
+  const handleAction = useCallback(
+    (act: CommandAction) => {
+      if (act.route) {
+        router.push(act.route as any);
+      } else if (act.actionType === 'zalo') {
+        Alert.alert('Liên hệ Admin', 'Zalo Kỹ Thuật IPAVIET: 0987.xxx.xxx');
+      }
+    },
+    [router]
+  );
+
+  const handleAppPress = useCallback(
+    (id: string) => {
+      router.push(`/details/${id}` as any);
+    },
+    [router]
+  );
 
   const resetChat = useCallback(() => {
     haptic('success');
     setMessages([]);
     setOrbState('idle');
   }, [haptic]);
+
+  const suggestions = [
+    { label: 'Gia hạn VIP', query: 'gia han vip', icon: <Crown size={15} color="#FBBF24" /> },
+    { label: 'Ký App IPA', query: 'ky app vsign', icon: <Wrench size={15} color="#A78BFA" /> },
+    { label: 'Lỗi chứng chỉ', query: 'loi chung chi app crash', icon: <AlertTriangle size={15} color="#FB7185" /> },
+    { label: 'Nạp xu ACB', query: 'nap tien ngan hang', icon: <Wallet size={15} color="#34D399" /> },
+    { label: 'Tìm IPA YouTube', query: 'tim ipa youtube', icon: <Sparkles size={15} color="#00E5FF" /> },
+    { label: 'Admin hỗ trợ', query: 'lien he zalo admin', icon: <MessageSquare size={15} color="#60A5FA" /> },
+  ];
 
   return (
     <View style={styles.root}>
@@ -881,14 +902,14 @@ export default function AiSupportScreen() {
 
       {/* Main Stream Area */}
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        style={{ flex: 1, paddingTop: Platform.OS === 'ios' ? 94 : 70 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView
           ref={scrollViewRef}
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 110, paddingBottom: 100 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 }}
           showsVerticalScrollIndicator={false}
         >
           {/* Energy Orb Header */}
@@ -906,6 +927,23 @@ export default function AiSupportScreen() {
             )}
           </View>
 
+          {/* Quick Suggestions Grid when no messages */}
+          {messages.length === 0 && (
+            <View style={styles.suggestionGrid}>
+              {suggestions.map((item, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.suggestionPill}
+                  onPress={() => handleSendText(item.query)}
+                  activeOpacity={0.8}
+                >
+                  {item.icon}
+                  <Text style={styles.suggestionPillText}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
           {/* Messages Entities */}
           {messages.map((m) => (
             <MessageEntity
@@ -917,7 +955,24 @@ export default function AiSupportScreen() {
           ))}
         </ScrollView>
 
-        {/* Liquid Input Container */}
+        {/* Quick Suggestion Scroll Bar above Input */}
+        <View style={styles.quickBarRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+            {suggestions.map((item, i) => (
+              <TouchableOpacity
+                key={i}
+                style={styles.quickBarBtn}
+                onPress={() => handleSendText(item.query)}
+                activeOpacity={0.8}
+              >
+                {item.icon}
+                <Text style={styles.quickBarText}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Liquid Input Dock (Flex Layout for Smooth Keyboard Push-Up) */}
         <View style={styles.inputDock}>
           <LiquidInput
             value={inputText}
@@ -1001,7 +1056,7 @@ const styles = StyleSheet.create({
   // Orb Header Box
   orbHeaderBox: {
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 12,
   },
   orbGlowLayer: {
     position: 'absolute',
@@ -1035,7 +1090,7 @@ const styles = StyleSheet.create({
   },
   heroTextBox: {
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 16,
     paddingHorizontal: 20,
   },
   heroTitleText: {
@@ -1053,6 +1108,37 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 20,
     maxWidth: 320,
+  },
+
+  // Suggestion Grid (Hero state)
+  suggestionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 20,
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  suggestionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#00F0FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  suggestionPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: S.text,
   },
 
   // User Message
@@ -1238,19 +1324,39 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
 
-  // Input Dock
+  // Quick Bar Row
+  quickBarRow: {
+    paddingVertical: 6,
+  },
+  quickBarBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  quickBarText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: S.textPrimary,
+  },
+
+  // Input Dock (Flex layout for smooth Keyboard avoiding)
   inputDock: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 24 : 16,
-    left: 16,
-    right: 16,
-    zIndex: 200,
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
+    paddingTop: 8,
+    backgroundColor: 'transparent',
   },
   liquidInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 56,
-    borderRadius: 28,
+    height: 54,
+    borderRadius: 27,
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.08)',
     paddingLeft: 20,
@@ -1258,6 +1364,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: S.cyan,
     shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 8,
   },
