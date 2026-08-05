@@ -21,7 +21,6 @@ import * as Haptics from 'expo-haptics';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  useAnimatedKeyboard,
   withSpring,
   withTiming,
   withRepeat,
@@ -783,9 +782,7 @@ export default function AiSupportScreen() {
   const [apps, setApps] = useState<AppItem[]>([]);
 
   const scrollViewRef = useRef<ScrollView>(null);
-
-  // UI-Thread 120Hz Synchronous Native Keyboard Module
-  const keyboard = useAnimatedKeyboard({ isStatusBarTranslucentAndroid: true });
+  const keyboardOffset = useSharedValue(0);
 
   useEffect(() => {
     Promise.all([fetchRegularApps(), fetchVIPApps()]).then(([reg, vip]) => {
@@ -793,22 +790,37 @@ export default function AiSupportScreen() {
     });
   }, []);
 
+  // Smooth Reanimated 120Hz Keyboard Slide-Up
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const sub = Keyboard.addListener(showEvent, () => {
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      const targetOffset = -e.endCoordinates.height + (Platform.OS === 'ios' ? 24 : 0);
+      keyboardOffset.value = withTiming(targetOffset, {
+        duration: e.duration || 250,
+        easing: Easing.out(Easing.cubic),
+      });
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 50);
+      }, 100);
     });
-    return () => sub.remove();
+
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
+      keyboardOffset.value = withTiming(0, {
+        duration: e.duration || 250,
+        easing: Easing.out(Easing.cubic),
+      });
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
   }, []);
 
   const animatedDockStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: -keyboard.height.value }],
-  }));
-
-  const animatedScrollPaddingStyle = useAnimatedStyle(() => ({
-    paddingBottom: 130 + keyboard.height.value,
+    transform: [{ translateY: keyboardOffset.value }],
   }));
 
   const scrollToBottom = useCallback(() => {
@@ -924,15 +936,15 @@ export default function AiSupportScreen() {
         </View>
       </View>
 
-      {/* Main Content Area with Native UI-Thread Keyboard Engine */}
+      {/* Main Content Area */}
       <View style={{ flex: 1, paddingTop: Platform.OS === 'ios' ? 94 : 70 }}>
-        <ScrollView
-          ref={scrollViewRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16 }}
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View style={animatedScrollPaddingStyle}>
+        <Animated.View style={[{ flex: 1 }, animatedDockStyle]}>
+          <ScrollView
+            ref={scrollViewRef}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 140 }}
+            showsVerticalScrollIndicator={false}
+          >
             {/* Energy Orb Header */}
             <View style={styles.orbHeaderBox}>
               <EnergyOrb state={orbState} />
@@ -974,10 +986,10 @@ export default function AiSupportScreen() {
                 onAppPress={handleAppPress}
               />
             ))}
-          </Animated.View>
-        </ScrollView>
+          </ScrollView>
+        </Animated.View>
 
-        {/* Animated Floating Bottom Dock (Frame-Perfect 120Hz Reanimated Keyboard Sync) */}
+        {/* Animated Floating Bottom Dock (Input + Quick Suggestions with Smooth 120Hz Reanimated Slide-Up) */}
         <Animated.View style={[styles.bottomFloatingDock, animatedDockStyle]}>
           {/* Quick Suggestion Scroll Bar above Input */}
           <View style={styles.quickBarRow}>
