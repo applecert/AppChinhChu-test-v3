@@ -60,6 +60,7 @@ import { auth, db } from '../firebaseConfig';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { fetchRegularApps, fetchVIPApps, AppItem } from '../constants/data';
+import { COLORS, useThemeUpdate, loadTheme } from '../constants/theme';
 
 const BANK_ACCOUNT = '22703611';
 const BANK_NAME = 'ACB';
@@ -70,21 +71,11 @@ const BANK_OWNER = 'TRAN NGUYEN MINH QUI';
    ═══════════════════════════════════════════════════════════════ */
 
 const S = {
-  void: '#000000',
-  depth1: '#020205',
-  depth2: '#05050A',
-  depth3: '#080810',
-
   cyan: '#00E5FF',
   violet: '#A78BFA',
   rose: '#FB7185',
   amber: '#FBBF24',
   emerald: '#34D399',
-
-  text: '#FFFFFF',
-  textPrimary: 'rgba(255,255,255,0.95)',
-  textSecondary: 'rgba(255,255,255,0.55)',
-  textTertiary: 'rgba(255,255,255,0.30)',
 
   springBouncy: { damping: 12, stiffness: 200, mass: 0.8 },
   springSoft: { damping: 18, stiffness: 140, mass: 1.0 },
@@ -197,10 +188,10 @@ const useHaptic = () => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   LIVING BACKGROUND — Spatial Ambient
+   LIVING BACKGROUND — Spatial Ambient (Light/Dark Dynamic)
    ═══════════════════════════════════════════════════════════════ */
 
-const LivingBackground = memo(() => {
+const LivingBackground = memo(({ isLight }: { isLight: boolean }) => {
   const time = useSharedValue(0);
 
   useEffect(() => {
@@ -218,7 +209,7 @@ const LivingBackground = memo(() => {
       { translateY: interpolate(time.value, [0, 1], [-20, 20]) },
       { scale: interpolate(time.value, [0, 0.5, 1], [1, 1.1, 1]) },
     ],
-    opacity: 0.6,
+    opacity: isLight ? 0.4 : 0.6,
   }));
 
   const aurora2Style = useAnimatedStyle(() => ({
@@ -227,15 +218,19 @@ const LivingBackground = memo(() => {
       { translateY: interpolate(time.value, [0, 1], [30, -10]) },
       { scale: interpolate(time.value, [0, 0.5, 1], [1.1, 1, 1.1]) },
     ],
-    opacity: 0.5,
+    opacity: isLight ? 0.3 : 0.5,
   }));
+
+  const bgGradient = isLight
+    ? (['#F4F4F6', '#FAFAFB', '#F4F4F6'] as const)
+    : (['#020205', '#05050A', '#080810'] as const);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: S.void }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: isLight ? '#F4F4F6' : '#000000' }]} />
 
       <LinearGradient
-        colors={[S.depth1, S.depth2, S.depth3]}
+        colors={bgGradient}
         locations={[0, 0.5, 1]}
         style={StyleSheet.absoluteFill}
       />
@@ -251,7 +246,7 @@ const LivingBackground = memo(() => {
           width: 500,
           height: 500,
           borderRadius: 250,
-          backgroundColor: 'rgba(139,92,246,0.09)',
+          backgroundColor: isLight ? 'rgba(139,92,246,0.06)' : 'rgba(139,92,246,0.09)',
           top: -100,
           left: -150,
         }} />
@@ -268,7 +263,7 @@ const LivingBackground = memo(() => {
           width: 450,
           height: 450,
           borderRadius: 225,
-          backgroundColor: 'rgba(0,229,255,0.07)',
+          backgroundColor: isLight ? 'rgba(0,136,255,0.05)' : 'rgba(0,229,255,0.07)',
           bottom: -80,
           right: -80,
         }} />
@@ -285,9 +280,10 @@ const ORB_SIZE = 120;
 
 interface EnergyOrbProps {
   state: 'idle' | 'listening' | 'thinking' | 'speaking';
+  isLight: boolean;
 }
 
-const EnergyOrb = memo(({ state }: EnergyOrbProps) => {
+const EnergyOrb = memo(({ state, isLight }: EnergyOrbProps) => {
   const breath = useSharedValue(1);
 
   useEffect(() => {
@@ -322,14 +318,17 @@ const EnergyOrb = memo(({ state }: EnergyOrbProps) => {
     <View style={{ width: ORB_SIZE, height: ORB_SIZE, alignSelf: 'center', justifyContent: 'center', alignItems: 'center' }}>
       <Animated.View style={[styles.orbGlowLayer, animatedStyle]}>
         <LinearGradient
-          colors={['rgba(0,229,255,0.35)', 'rgba(167,139,250,0.25)', 'transparent']}
+          colors={isLight
+            ? ['rgba(0,122,255,0.25)', 'rgba(139,92,246,0.18)', 'transparent']
+            : ['rgba(0,229,255,0.35)', 'rgba(167,139,250,0.25)', 'transparent']
+          }
           style={styles.orbGlowCircle}
         />
       </Animated.View>
 
-      <Animated.View style={[styles.orbCoreBox, animatedStyle]}>
+      <Animated.View style={[styles.orbCoreBox, animatedStyle, { borderColor: isLight ? 'rgba(0,122,255,0.4)' : 'rgba(255,255,255,0.3)' }]}>
         <LinearGradient
-          colors={['#00E5FF', '#8B5CF6']}
+          colors={isLight ? ['#007AFF', '#7C3AED'] : ['#00E5FF', '#8B5CF6']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.orbCoreGradient}
@@ -345,7 +344,7 @@ const EnergyOrb = memo(({ state }: EnergyOrbProps) => {
    ═══════════════════════════════════════════════════════════════ */
 
 // 1. Certificate Import Form Widget
-const CertImportWidget = memo(({ onComplete }: { onComplete: (filename: string, pass: string) => void }) => {
+const CertImportWidget = memo(({ onComplete, isLight }: { onComplete: (filename: string, pass: string) => void; isLight: boolean }) => {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const haptic = useHaptic();
@@ -375,49 +374,56 @@ const CertImportWidget = memo(({ onComplete }: { onComplete: (filename: string, 
     onComplete(selectedFile, password || '1');
   };
 
+  const textColor = isLight ? '#111827' : '#FFFFFF';
+  const subTextColor = isLight ? '#6B7280' : 'rgba(255,255,255,0.55)';
+  const boxBg = isLight ? '#FFFFFF' : 'rgba(0,0,0,0.4)';
+  const boxBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.12)';
+  const inputBg = isLight ? '#F3F4F6' : 'rgba(255,255,255,0.06)';
+  const inputBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)';
+
   return (
-    <View style={styles.widgetBox}>
-      <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
-      <LinearGradient colors={['rgba(0,229,255,0.08)', 'rgba(167,139,250,0.04)']} style={StyleSheet.absoluteFill} />
+    <View style={[styles.widgetBox, { backgroundColor: boxBg, borderColor: boxBorder }]}>
+      <BlurView intensity={isLight ? 20 : 50} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={isLight ? ['rgba(0,122,255,0.05)', 'rgba(139,92,246,0.03)'] : ['rgba(0,229,255,0.08)', 'rgba(167,139,250,0.04)']} style={StyleSheet.absoluteFill} />
 
       <View style={styles.widgetHeaderRow}>
-        <FileUp size={16} color={S.cyan} />
-        <Text style={styles.widgetTitleText}>NẠP CHỨNG CHỈ P12 TỰ ĐỘNG</Text>
+        <FileUp size={16} color={isLight ? '#007AFF' : S.cyan} />
+        <Text style={[styles.widgetTitleText, { color: isLight ? '#007AFF' : S.cyan }]}>NẠP CHỨNG CHỈ P12 TỰ ĐỘNG</Text>
       </View>
 
       {/* Select File Button */}
-      <TouchableOpacity style={styles.widgetPickBtn} onPress={handlePickFile} activeOpacity={0.8}>
-        <FileCheck size={18} color={selectedFile ? S.emerald : S.textSecondary} />
-        <Text style={[styles.widgetPickBtnText, selectedFile && { color: S.emerald, fontWeight: '800' }]} numberOfLines={1}>
+      <TouchableOpacity style={[styles.widgetPickBtn, { backgroundColor: inputBg, borderColor: inputBorder }]} onPress={handlePickFile} activeOpacity={0.8}>
+        <FileCheck size={18} color={selectedFile ? S.emerald : subTextColor} />
+        <Text style={[styles.widgetPickBtnText, { color: selectedFile ? S.emerald : subTextColor }, selectedFile && { fontWeight: '800' }]} numberOfLines={1}>
           {selectedFile ? `Đã chọn: ${selectedFile}` : 'Chọn tệp ZIP chứng chỉ (.zip)'}
         </Text>
       </TouchableOpacity>
 
       {/* Password Input */}
-      <View style={styles.widgetInputRow}>
-        <KeyRound size={16} color={S.textSecondary} />
+      <View style={[styles.widgetInputRow, { backgroundColor: inputBg, borderColor: inputBorder }]}>
+        <KeyRound size={16} color={subTextColor} />
         <TextInput
-          style={styles.widgetTextInput}
+          style={[styles.widgetTextInput, { color: textColor }]}
           placeholder="Mật khẩu P12 (Mặc định 1)"
-          placeholderTextColor={S.textTertiary}
+          placeholderTextColor={subTextColor}
           value={password}
           onChangeText={setPassword}
-          selectionColor={S.cyan}
+          selectionColor={isLight ? '#007AFF' : S.cyan}
         />
       </View>
 
       {/* Confirm Button */}
       <TouchableOpacity style={styles.widgetSubmitBtn} onPress={handleSubmit} activeOpacity={0.8}>
-        <LinearGradient colors={[S.cyan, S.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-        <Zap size={14} color={S.void} />
-        <Text style={styles.widgetSubmitBtnText}>XÁC NHẬN NẠP & KÝ TỰ ĐỘNG</Text>
+        <LinearGradient colors={isLight ? ['#007AFF', '#7C3AED'] : [S.cyan, S.violet]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <Zap size={14} color="#FFFFFF" />
+        <Text style={[styles.widgetSubmitBtnText, { color: '#FFFFFF' }]}>XÁC NHẬN NẠP & KÝ TỰ ĐỘNG</Text>
       </TouchableOpacity>
     </View>
   );
 });
 
 // 2. Bank Deposit Widget
-const BankDepositWidget = memo(({ userEmail }: { userEmail?: string }) => {
+const BankDepositWidget = memo(({ userEmail, isLight }: { userEmail?: string; isLight: boolean }) => {
   const haptic = useHaptic();
   const [copiedStk, setCopiedStk] = useState(false);
   const [copiedContent, setCopiedContent] = useState(false);
@@ -436,10 +442,17 @@ const BankDepositWidget = memo(({ userEmail }: { userEmail?: string }) => {
     Alert.alert('Đã Sao Chép', `Đã copy "${txt}" vào khay nhớ tạm!`);
   };
 
+  const textColor = isLight ? '#111827' : '#FFFFFF';
+  const subTextColor = isLight ? '#6B7280' : 'rgba(255,255,255,0.55)';
+  const boxBg = isLight ? '#FFFFFF' : 'rgba(0,0,0,0.4)';
+  const boxBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.12)';
+  const itemBg = isLight ? '#F9FAFB' : 'rgba(255,255,255,0.05)';
+  const itemBorder = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)';
+
   return (
-    <View style={styles.widgetBox}>
-      <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
-      <LinearGradient colors={['rgba(52,211,153,0.08)', 'rgba(0,229,255,0.04)']} style={StyleSheet.absoluteFill} />
+    <View style={[styles.widgetBox, { backgroundColor: boxBg, borderColor: boxBorder }]}>
+      <BlurView intensity={isLight ? 20 : 50} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={isLight ? ['rgba(52,211,153,0.06)', 'rgba(0,122,255,0.03)'] : ['rgba(52,211,153,0.08)', 'rgba(0,229,255,0.04)']} style={StyleSheet.absoluteFill} />
 
       <View style={styles.widgetHeaderRow}>
         <Wallet size={16} color={S.emerald} />
@@ -448,44 +461,44 @@ const BankDepositWidget = memo(({ userEmail }: { userEmail?: string }) => {
 
       <View style={styles.bankDetailCard}>
         <View style={styles.bankDetailRow}>
-          <Text style={styles.bankLabel}>Ngân hàng:</Text>
-          <Text style={styles.bankValBold}>{BANK_NAME} (Á Châu)</Text>
+          <Text style={[styles.bankLabel, { color: subTextColor }]}>Ngân hàng:</Text>
+          <Text style={[styles.bankValBold, { color: textColor }]}>{BANK_NAME} (Á Châu)</Text>
         </View>
 
         <View style={styles.bankDetailRow}>
-          <Text style={styles.bankLabel}>Chủ tài khoản:</Text>
-          <Text style={styles.bankValBold}>{BANK_OWNER}</Text>
+          <Text style={[styles.bankLabel, { color: subTextColor }]}>Chủ tài khoản:</Text>
+          <Text style={[styles.bankValBold, { color: textColor }]}>{BANK_OWNER}</Text>
         </View>
 
         {/* STK Row */}
-        <View style={styles.bankCopyRow}>
+        <View style={[styles.bankCopyRow, { backgroundColor: itemBg, borderColor: itemBorder }]}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.bankLabel}>Số tài khoản:</Text>
+            <Text style={[styles.bankLabel, { color: subTextColor }]}>Số tài khoản:</Text>
             <Text style={styles.bankValHighlight}>{BANK_ACCOUNT}</Text>
           </View>
           <TouchableOpacity
-            style={styles.copyBtnPill}
+            style={[styles.copyBtnPill, { backgroundColor: isLight ? '#E5E7EB' : 'rgba(255,255,255,0.1)' }]}
             onPress={() => copyText(BANK_ACCOUNT, 'stk')}
             activeOpacity={0.8}
           >
-            {copiedStk ? <CheckCircle2 size={14} color={S.emerald} /> : <Copy size={14} color={S.text} />}
-            <Text style={styles.copyBtnText}>{copiedStk ? 'Đã chép' : 'Copy STK'}</Text>
+            {copiedStk ? <CheckCircle2 size={14} color={S.emerald} /> : <Copy size={14} color={textColor} />}
+            <Text style={[styles.copyBtnText, { color: textColor }]}>{copiedStk ? 'Đã chép' : 'Copy STK'}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Transfer Content Row */}
-        <View style={styles.bankCopyRow}>
+        <View style={[styles.bankCopyRow, { backgroundColor: itemBg, borderColor: itemBorder }]}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.bankLabel}>Nội dung nạp:</Text>
+            <Text style={[styles.bankLabel, { color: subTextColor }]}>Nội dung nạp:</Text>
             <Text style={styles.bankValHighlight}>{contentStr}</Text>
           </View>
           <TouchableOpacity
-            style={styles.copyBtnPill}
+            style={[styles.copyBtnPill, { backgroundColor: isLight ? '#E5E7EB' : 'rgba(255,255,255,0.1)' }]}
             onPress={() => copyText(contentStr, 'content')}
             activeOpacity={0.8}
           >
-            {copiedContent ? <CheckCircle2 size={14} color={S.emerald} /> : <Copy size={14} color={S.text} />}
-            <Text style={styles.copyBtnText}>{copiedContent ? 'Đã chép' : 'Copy Nội dung'}</Text>
+            {copiedContent ? <CheckCircle2 size={14} color={S.emerald} /> : <Copy size={14} color={textColor} />}
+            <Text style={[styles.copyBtnText, { color: textColor }]}>{copiedContent ? 'Đã chép' : 'Copy Nội dung'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -494,13 +507,20 @@ const BankDepositWidget = memo(({ userEmail }: { userEmail?: string }) => {
 });
 
 // 3. VIP Package Selector Widget
-const VipPackagesWidget = memo(({ onSelectPackage }: { onSelectPackage: (pkg: string, cost: number) => void }) => {
+const VipPackagesWidget = memo(({ onSelectPackage, isLight }: { onSelectPackage: (pkg: string, cost: number) => void; isLight: boolean }) => {
   const haptic = useHaptic();
 
+  const textColor = isLight ? '#111827' : '#FFFFFF';
+  const subTextColor = isLight ? '#6B7280' : 'rgba(255,255,255,0.55)';
+  const boxBg = isLight ? '#FFFFFF' : 'rgba(0,0,0,0.4)';
+  const boxBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.12)';
+  const cardBg = isLight ? '#F9FAFB' : 'rgba(255,255,255,0.05)';
+  const cardBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)';
+
   return (
-    <View style={styles.widgetBox}>
-      <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
-      <LinearGradient colors={['rgba(251,191,36,0.08)', 'rgba(0,229,255,0.04)']} style={StyleSheet.absoluteFill} />
+    <View style={[styles.widgetBox, { backgroundColor: boxBg, borderColor: boxBorder }]}>
+      <BlurView intensity={isLight ? 20 : 50} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={isLight ? ['rgba(251,191,36,0.06)', 'rgba(0,122,255,0.03)'] : ['rgba(251,191,36,0.08)', 'rgba(0,229,255,0.04)']} style={StyleSheet.absoluteFill} />
 
       <View style={styles.widgetHeaderRow}>
         <Crown size={16} color={S.amber} />
@@ -509,7 +529,7 @@ const VipPackagesWidget = memo(({ onSelectPackage }: { onSelectPackage: (pkg: st
 
       <View style={{ gap: 10, marginTop: 10 }}>
         <TouchableOpacity
-          style={styles.vipPkgCard}
+          style={[styles.vipPkgCard, { backgroundColor: cardBg, borderColor: cardBorder }]}
           onPress={() => {
             haptic('medium');
             onSelectPackage('Gói VIP 1 Tháng', 50000);
@@ -517,17 +537,17 @@ const VipPackagesWidget = memo(({ onSelectPackage }: { onSelectPackage: (pkg: st
           activeOpacity={0.8}
         >
           <View style={{ flex: 1 }}>
-            <Text style={styles.vipPkgName}>Gói VIP 1 Tháng</Text>
-            <Text style={styles.vipPkgDesc}>Tải max tốc độ, ký cert riêng chống văng</Text>
+            <Text style={[styles.vipPkgName, { color: textColor }]}>Gói VIP 1 Tháng</Text>
+            <Text style={[styles.vipPkgDesc, { color: subTextColor }]}>Tải max tốc độ, ký cert riêng chống văng</Text>
           </View>
           <View style={styles.vipPkgPriceBox}>
-            <Text style={styles.vipPkgPriceText}>50.000đ</Text>
-            <Text style={styles.vipPkgBuyText}>Đăng ký</Text>
+            <Text style={[styles.vipPkgPriceText, { color: isLight ? '#007AFF' : S.cyan }]}>50.000đ</Text>
+            <Text style={[styles.vipPkgBuyText, { backgroundColor: isLight ? '#111827' : '#FFFFFF', color: isLight ? '#FFFFFF' : '#000000' }]}>Đăng ký</Text>
           </View>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.vipPkgCard, { borderColor: S.amber }]}
+          style={[styles.vipPkgCard, { backgroundColor: cardBg, borderColor: S.amber }]}
           onPress={() => {
             haptic('heavy');
             onSelectPackage('Gói VIP 1 Năm (Khuyên Dùng)', 300000);
@@ -536,14 +556,14 @@ const VipPackagesWidget = memo(({ onSelectPackage }: { onSelectPackage: (pkg: st
         >
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.vipPkgName}>Gói VIP 1 Năm</Text>
+              <Text style={[styles.vipPkgName, { color: textColor }]}>Gói VIP 1 Năm</Text>
               <View style={styles.bestTag}><Text style={styles.bestTagText}>HOT</Text></View>
             </View>
-            <Text style={styles.vipPkgDesc}>Tiết kiệm 50%, bảo hành thu hồi trọn đời</Text>
+            <Text style={[styles.vipPkgDesc, { color: subTextColor }]}>Tiết kiệm 50%, bảo hành thu hồi trọn đời</Text>
           </View>
           <View style={styles.vipPkgPriceBox}>
             <Text style={[styles.vipPkgPriceText, { color: S.amber }]}>300.000đ</Text>
-            <Text style={styles.vipPkgBuyText}>Đăng ký</Text>
+            <Text style={[styles.vipPkgBuyText, { backgroundColor: isLight ? '#111827' : '#FFFFFF', color: isLight ? '#FFFFFF' : '#000000' }]}>Đăng ký</Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -561,15 +581,18 @@ interface LiquidInputProps {
   onSubmit: () => void;
   orbState?: string;
   onFocusChange: (focused: boolean) => void;
+  isLight: boolean;
 }
 
-const LiquidInput = memo(({ value, onChangeText, onSubmit, onFocusChange }: LiquidInputProps) => {
+const LiquidInput = memo(({ value, onChangeText, onSubmit, onFocusChange, isLight }: LiquidInputProps) => {
   const focused = useSharedValue(0);
   const scale = useSharedValue(1);
   const haptic = useHaptic();
 
   const animatedStyle = useAnimatedStyle(() => ({
-    borderColor: focused.value === 1 ? 'rgba(0,229,255,0.5)' : 'rgba(255,255,255,0.08)',
+    borderColor: focused.value === 1
+      ? (isLight ? 'rgba(0,122,255,0.6)' : 'rgba(0,229,255,0.5)')
+      : (isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)'),
     transform: [{ scale: scale.value }],
   }));
 
@@ -597,24 +620,28 @@ const LiquidInput = memo(({ value, onChangeText, onSubmit, onFocusChange }: Liqu
   };
 
   return (
-    <Animated.View style={[styles.liquidInputContainer, animatedStyle]}>
-      <BlurView intensity={60} tint="dark" style={StyleSheet.absoluteFill} />
+    <Animated.View style={[
+      styles.liquidInputContainer,
+      animatedStyle,
+      { backgroundColor: isLight ? 'rgba(255,255,255,0.92)' : 'rgba(12,12,18,0.85)' }
+    ]}>
+      <BlurView intensity={isLight ? 40 : 60} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
       <LinearGradient
-        colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)', 'transparent']}
-        locations={[0, 0.5, 1]}
+        colors={isLight ? ['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.6)'] : ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)']}
+        locations={[0, 1]}
         style={StyleSheet.absoluteFill}
       />
       <TextInput
-        style={styles.liquidInput}
+        style={[styles.liquidInput, { color: isLight ? '#111827' : '#FFFFFF' }]}
         placeholder="Yêu cầu AI bất kỳ điều gì (gõ 'ipa youtube', 'nạp xu', 'chứng chỉ')..."
-        placeholderTextColor={S.textTertiary}
+        placeholderTextColor={isLight ? '#9CA3AF' : 'rgba(255,255,255,0.30)'}
         value={value}
         onChangeText={onChangeText}
         onFocus={handleFocus}
         onBlur={handleBlur}
         onSubmitEditing={handleSubmit}
         returnKeyType="send"
-        selectionColor={S.cyan}
+        selectionColor={isLight ? '#007AFF' : S.cyan}
         multiline={false}
       />
       <TouchableOpacity
@@ -627,12 +654,15 @@ const LiquidInput = memo(({ value, onChangeText, onSubmit, onFocusChange }: Liqu
         ]}
       >
         <LinearGradient
-          colors={value.trim() ? [S.cyan, S.violet] : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
+          colors={value.trim()
+            ? (isLight ? ['#007AFF', '#7C3AED'] : [S.cyan, S.violet])
+            : (isLight ? ['rgba(0,0,0,0.06)', 'rgba(0,0,0,0.04)'] : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)'])
+          }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
-        <Send size={14} color={value.trim() ? S.void : S.textTertiary} strokeWidth={2.5} />
+        <Send size={14} color={value.trim() ? '#FFFFFF' : (isLight ? '#9CA3AF' : 'rgba(255,255,255,0.3)')} strokeWidth={2.5} />
       </TouchableOpacity>
     </Animated.View>
   );
@@ -642,7 +672,7 @@ const LiquidInput = memo(({ value, onChangeText, onSubmit, onFocusChange }: Liqu
    INTELLIGENCE TEXT & SPATIAL CARD
    ═══════════════════════════════════════════════════════════════ */
 
-const WordToken = memo(({ word, index, total, progress }: any) => {
+const WordToken = memo(({ word, index, total, progress, textColor }: any) => {
   const style = useAnimatedStyle(() => ({
     opacity: interpolate(
       progress.value,
@@ -661,13 +691,13 @@ const WordToken = memo(({ word, index, total, progress }: any) => {
   }));
 
   return (
-    <Animated.Text style={[styles.wordToken, style]}>
+    <Animated.Text style={[styles.wordToken, style, { color: textColor }]}>
       {word}{' '}
     </Animated.Text>
   );
 });
 
-const IntelligenceText = memo(({ text, onComplete }: { text: string; onComplete?: () => void }) => {
+const IntelligenceText = memo(({ text, onComplete, textColor }: { text: string; onComplete?: () => void; textColor: string }) => {
   const progress = useSharedValue(0);
   const words = text.split(' ');
 
@@ -679,15 +709,15 @@ const IntelligenceText = memo(({ text, onComplete }: { text: string; onComplete?
   }, [text]);
 
   return (
-    <Text style={styles.intelligenceText}>
+    <Text style={[styles.intelligenceText, { color: textColor }]}>
       {words.map((word, i) => (
-        <WordToken key={`${i}-${word}`} word={word} index={i} total={words.length} progress={progress} />
+        <WordToken key={`${i}-${word}`} word={word} index={i} total={words.length} progress={progress} textColor={textColor} />
       ))}
     </Text>
   );
 });
 
-const SpatialAppCard = memo(({ app, onPress, index }: { app: AppItem; onPress: () => void; index: number }) => {
+const SpatialAppCard = memo(({ app, onPress, index, isLight }: { app: AppItem; onPress: () => void; index: number; isLight: boolean }) => {
   const entry = useSharedValue(0);
   const press = useSharedValue(1);
   const haptic = useHaptic();
@@ -713,6 +743,11 @@ const SpatialAppCard = memo(({ app, onPress, index }: { app: AppItem; onPress: (
     press.value = withSpring(1, S.springBouncy);
   };
 
+  const cardBg = isLight ? '#FFFFFF' : 'rgba(255,255,255,0.05)';
+  const cardBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.12)';
+  const nameColor = isLight ? '#111827' : '#FFFFFF';
+  const subColor = isLight ? '#6B7280' : 'rgba(255,255,255,0.55)';
+
   return (
     <Animated.View style={[styles.spatialCardWrap, entryStyle]}>
       <TouchableOpacity
@@ -721,18 +756,18 @@ const SpatialAppCard = memo(({ app, onPress, index }: { app: AppItem; onPress: (
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
       >
-        <View style={styles.spatialCard}>
-          <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={[styles.spatialCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+          <BlurView intensity={isLight ? 20 : 40} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
           <LinearGradient
-            colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)']}
+            colors={isLight ? ['rgba(255,255,255,0.8)', 'rgba(255,255,255,0.4)'] : ['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)']}
             style={StyleSheet.absoluteFill}
           />
 
           <View style={styles.cardTop}>
             <Image source={{ uri: app.iconUrl }} style={styles.cardIcon} />
             <View style={styles.cardMeta}>
-              <Text style={styles.cardName} numberOfLines={1}>{app.name}</Text>
-              <Text style={styles.cardCategory} numberOfLines={1}>{app.category || 'IPA'}</Text>
+              <Text style={[styles.cardName, { color: nameColor }]} numberOfLines={1}>{app.name}</Text>
+              <Text style={[styles.cardCategory, { color: subColor }]} numberOfLines={1}>{app.category || 'IPA'}</Text>
               <View style={styles.cardRating}>
                 <Star size={10} color={S.amber} fill={S.amber} />
                 <Text style={styles.cardRatingText}>{app.rating || '4.8'}</Text>
@@ -754,9 +789,9 @@ const SpatialAppCard = memo(({ app, onPress, index }: { app: AppItem; onPress: (
           </View>
 
           <View style={styles.cardAction}>
-            <TouchableOpacity style={styles.cardButton} onPress={onPress} activeOpacity={0.8}>
-              <Text style={styles.cardButtonText}>TẢI IPA NGAY</Text>
-              <ChevronRight size={12} color={S.void} strokeWidth={3} />
+            <TouchableOpacity style={[styles.cardButton, { backgroundColor: isLight ? '#007AFF' : S.cyan }]} onPress={onPress} activeOpacity={0.8}>
+              <Text style={[styles.cardButtonText, { color: '#FFFFFF' }]}>TẢI IPA NGAY</Text>
+              <ChevronRight size={12} color="#FFFFFF" strokeWidth={3} />
             </TouchableOpacity>
           </View>
         </View>
@@ -765,7 +800,7 @@ const SpatialAppCard = memo(({ app, onPress, index }: { app: AppItem; onPress: (
   );
 });
 
-const ActionChip = memo(({ action, onPress, index }: { action: CommandAction; onPress: () => void; index: number }) => {
+const ActionChip = memo(({ action, onPress, index, isLight }: { action: CommandAction; onPress: () => void; index: number; isLight: boolean }) => {
   const entry = useSharedValue(0);
   const press = useSharedValue(1);
   const haptic = useHaptic();
@@ -780,9 +815,9 @@ const ActionChip = memo(({ action, onPress, index }: { action: CommandAction; on
   }));
 
   const colors: Record<string, { bg: readonly [string, string]; text: string }> = {
-    primary: { bg: [S.cyan, S.violet] as const, text: S.void },
-    secondary: { bg: ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.08)'] as const, text: S.text },
-    ghost: { bg: ['transparent', 'transparent'] as const, text: S.textSecondary },
+    primary: { bg: isLight ? ['#007AFF', '#7C3AED'] as const : [S.cyan, S.violet] as const, text: '#FFFFFF' },
+    secondary: { bg: isLight ? ['rgba(0,0,0,0.06)', 'rgba(0,0,0,0.03)'] as const : ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.08)'] as const, text: isLight ? '#111827' : '#FFFFFF' },
+    ghost: { bg: ['transparent', 'transparent'] as const, text: isLight ? '#4B5563' : 'rgba(255,255,255,0.55)' },
   };
   const c = colors[action.style] || colors.primary;
 
@@ -797,10 +832,10 @@ const ActionChip = memo(({ action, onPress, index }: { action: CommandAction; on
         onPressIn={() => { press.value = withTiming(0.95, { duration: 80 }); }}
         onPressOut={() => { press.value = withSpring(1, S.springBouncy); }}
       >
-        <View style={[styles.actionChip, { borderColor: action.style === 'ghost' ? 'rgba(255,255,255,0.1)' : 'transparent' }]}>
+        <View style={[styles.actionChip, { borderColor: action.style === 'ghost' ? (isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)') : 'transparent' }]}>
           <LinearGradient colors={c.bg} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
           <Text style={[styles.actionChipText, { color: c.text }]}>{action.label}</Text>
-          {action.style === 'primary' && <Zap size={12} color={S.void} />}
+          {action.style === 'primary' && <Zap size={12} color="#FFFFFF" />}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -814,6 +849,7 @@ const MessageEntity = memo(({
   onCertComplete,
   onSelectVipPkg,
   userEmail,
+  isLight,
 }: {
   message: IntelligenceMessage;
   onAction: (a: CommandAction) => void;
@@ -821,6 +857,7 @@ const MessageEntity = memo(({
   onCertComplete: (filename: string, pass: string) => void;
   onSelectVipPkg: (pkg: string, cost: number) => void;
   userEmail?: string;
+  isLight: boolean;
 }) => {
   const entry = useSharedValue(0);
   const isUser = message.sender === 'user';
@@ -834,10 +871,16 @@ const MessageEntity = memo(({
     transform: [{ translateY: interpolate(entry.value, [0, 1], [35, 0]) }],
   }));
 
+  const userBg = isLight ? '#007AFF' : 'rgba(255,255,255,0.12)';
+  const userBorder = isLight ? '#0066CC' : 'rgba(255,255,255,0.18)';
+  const botBg = isLight ? '#FFFFFF' : 'rgba(255,255,255,0.04)';
+  const botBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+  const botTextColor = isLight ? '#111827' : 'rgba(255,255,255,0.95)';
+
   if (isUser) {
     return (
       <Animated.View style={[styles.userEntity, style]}>
-        <View style={styles.userEntityInner}>
+        <View style={[styles.userEntityInner, { backgroundColor: userBg, borderColor: userBorder }]}>
           <Text style={styles.userEntityText}>{message.text}</Text>
         </View>
       </Animated.View>
@@ -847,28 +890,28 @@ const MessageEntity = memo(({
   return (
     <Animated.View style={[styles.intelligenceEntity, style]}>
       <View style={styles.intentRow}>
-        <View style={styles.intentDot} />
-        <Text style={styles.intentLabel}>
+        <View style={[styles.intentDot, { backgroundColor: isLight ? '#007AFF' : S.cyan }]} />
+        <Text style={[styles.intentLabel, { color: isLight ? '#007AFF' : S.cyan }]}>
           {message.isProcessing ? 'Đang xử lý tự động...' : 'Autonomous AI'}
         </Text>
-        <Text style={styles.entityTime}>{message.timestamp}</Text>
+        <Text style={[styles.entityTime, { color: isLight ? '#9CA3AF' : 'rgba(255,255,255,0.30)' }]}>{message.timestamp}</Text>
       </View>
 
-      <View style={styles.entityContent}>
-        <IntelligenceText text={message.text} />
+      <View style={[styles.entityContent, { backgroundColor: botBg, borderColor: botBorder }]}>
+        <IntelligenceText text={message.text} textColor={botTextColor} />
       </View>
 
       {/* Embedded Widgets */}
       {message.widgetType === 'cert_import' && (
-        <CertImportWidget onComplete={onCertComplete} />
+        <CertImportWidget onComplete={onCertComplete} isLight={isLight} />
       )}
 
       {message.widgetType === 'bank_deposit' && (
-        <BankDepositWidget userEmail={userEmail} />
+        <BankDepositWidget userEmail={userEmail} isLight={isLight} />
       )}
 
       {message.widgetType === 'vip_packages' && (
-        <VipPackagesWidget onSelectPackage={onSelectVipPkg} />
+        <VipPackagesWidget onSelectPackage={onSelectVipPkg} isLight={isLight} />
       )}
 
       {message.appCards && message.appCards.length > 0 && (
@@ -884,6 +927,7 @@ const MessageEntity = memo(({
               app={app}
               index={i}
               onPress={() => onAppPress(app.id)}
+              isLight={isLight}
             />
           ))}
         </ScrollView>
@@ -897,6 +941,7 @@ const MessageEntity = memo(({
               action={act}
               index={i}
               onPress={() => onAction(act)}
+              isLight={isLight}
             />
           ))}
         </View>
@@ -1018,6 +1063,8 @@ const processSmartIntent = (raw: string, apps: AppItem[], userEmail?: string): P
    ═══════════════════════════════════════════════════════════════ */
 
 export default function AiSupportScreen() {
+  useThemeUpdate();
+
   const router = useRouter();
   const userState = useUserState();
   const haptic = useHaptic();
@@ -1028,10 +1075,13 @@ export default function AiSupportScreen() {
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [apps, setApps] = useState<AppItem[]>([]);
 
+  const isLight = COLORS.background === '#F4F4F6' || COLORS.background === '#FFFFFF' || COLORS.text === '#000000';
+
   const scrollViewRef = useRef<ScrollView>(null);
   const keyboard = useAnimatedKeyboard({ isStatusBarTranslucentAndroid: true });
 
   useEffect(() => {
+    loadTheme();
     Promise.all([fetchRegularApps(), fetchVIPApps()]).then(([reg, vip]) => {
       setApps([...reg, ...vip]);
     });
@@ -1175,40 +1225,50 @@ export default function AiSupportScreen() {
   }, [haptic]);
 
   const suggestions = [
-    { label: 'Hướng dẫn người mới', query: 'huong dan nguoi moi nap cert', icon: <HelpCircle size={15} color="#00E5FF" /> },
-    { label: 'Tìm ứng dụng IPA', query: 'tim ung dung ipa', icon: <Sparkles size={15} color="#A78BFA" /> },
+    { label: 'Hướng dẫn người mới', query: 'huong dan nguoi moi nap cert', icon: <HelpCircle size={15} color={isLight ? '#007AFF' : '#00E5FF'} /> },
+    { label: 'Tìm ứng dụng IPA', query: 'tim ung dung ipa', icon: <Sparkles size={15} color={isLight ? '#7C3AED' : '#A78BFA'} /> },
     { label: 'Thẻ nạp xu ACB', query: 'nap xu bank acb', icon: <Wallet size={15} color="#34D399" /> },
     { label: 'Bảng giá VIP', query: 'gia han vip', icon: <Crown size={15} color="#FBBF24" /> },
     { label: 'Lỗi app văng', query: 'loi chung chi app crash', icon: <AlertTriangle size={15} color="#FB7185" /> },
     { label: 'Admin hỗ trợ', query: 'lien he zalo admin', icon: <MessageSquare size={15} color="#60A5FA" /> },
   ];
 
-  return (
-    <View style={styles.root}>
-      <StatusBar style="light" />
-      <RNStatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+  const headerBg = isLight ? 'rgba(255,255,255,0.85)' : 'rgba(12,12,18,0.85)';
+  const headerBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+  const headerText = isLight ? '#111827' : '#FFFFFF';
+  const headerSubText = isLight ? '#6B7280' : 'rgba(255,255,255,0.55)';
+  const btnBg = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)';
+  const btnBorder = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.12)';
+  const pillBg = isLight ? '#FFFFFF' : 'rgba(255,255,255,0.08)';
+  const pillBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.12)';
+  const pillText = isLight ? '#111827' : '#FFFFFF';
 
-      {/* 10 Layer Spatial Background */}
-      <LivingBackground />
+  return (
+    <View style={[styles.root, { backgroundColor: isLight ? '#F4F4F6' : '#000000' }]}>
+      <StatusBar style={isLight ? 'dark' : 'light'} />
+      <RNStatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+
+      {/* Living Spatial Background */}
+      <LivingBackground isLight={isLight} />
 
       {/* Floating Header Bar */}
-      <View style={styles.topHeader}>
-        <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+      <View style={[styles.topHeader, { backgroundColor: headerBg, borderColor: headerBorder }]}>
+        <BlurView intensity={isLight ? 30 : 50} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
         <View style={styles.headerInner}>
-          <TouchableOpacity style={styles.iconCircleBtn} onPress={() => router.back()} activeOpacity={0.8}>
-            <ArrowLeft size={18} color={S.text} strokeWidth={2.5} />
+          <TouchableOpacity style={[styles.iconCircleBtn, { backgroundColor: btnBg, borderColor: btnBorder }]} onPress={() => router.back()} activeOpacity={0.8}>
+            <ArrowLeft size={18} color={headerText} strokeWidth={2.5} />
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitleText}>IPAVIET Autonomous AI</Text>
+            <Text style={[styles.headerTitleText, { color: headerText }]}>IPAVIET Autonomous AI</Text>
             <View style={styles.statusChip}>
               <View style={[styles.statusDot, { backgroundColor: S.emerald }]} />
-              <Text style={styles.statusText}>{userState.user ? userState.user.email : 'Autonomous OS 2026'}</Text>
+              <Text style={[styles.statusText, { color: headerSubText }]}>{userState.user ? userState.user.email : 'Autonomous OS 2026'}</Text>
             </View>
           </View>
 
-          <TouchableOpacity style={styles.iconCircleBtn} onPress={resetChat} activeOpacity={0.8}>
-            <RotateCcw size={16} color={S.textSecondary} />
+          <TouchableOpacity style={[styles.iconCircleBtn, { backgroundColor: btnBg, borderColor: btnBorder }]} onPress={resetChat} activeOpacity={0.8}>
+            <RotateCcw size={16} color={headerSubText} />
           </TouchableOpacity>
         </View>
       </View>
@@ -1224,13 +1284,13 @@ export default function AiSupportScreen() {
           <Animated.View style={animatedScrollPaddingStyle}>
             {/* Energy Orb Header */}
             <View style={styles.orbHeaderBox}>
-              <EnergyOrb state={orbState} />
+              <EnergyOrb state={orbState} isLight={isLight} />
               {messages.length === 0 && (
                 <View style={styles.heroTextBox}>
-                  <Text style={styles.heroTitleText}>
-                    Xin chào, <Text style={{ color: S.cyan }}>{userState.user?.displayName || 'Sếp'}</Text>
+                  <Text style={[styles.heroTitleText, { color: isLight ? '#111827' : '#FFFFFF' }]}>
+                    Xin chào, <Text style={{ color: isLight ? '#007AFF' : S.cyan }}>{userState.user?.displayName || 'Sếp'}</Text>
                   </Text>
-                  <Text style={styles.heroSubText}>
+                  <Text style={[styles.heroSubText, { color: isLight ? '#4B5563' : 'rgba(255,255,255,0.55)' }]}>
                     Em là Autonomous AI. Em có thể tự động ký App, tạo thẻ nạp xu ACB, hướng dẫn nạp P12 và tìm IPA Mod cho sếp.
                   </Text>
                 </View>
@@ -1243,12 +1303,12 @@ export default function AiSupportScreen() {
                 {suggestions.map((item, index) => (
                   <TouchableOpacity
                     key={index}
-                    style={styles.suggestionPill}
+                    style={[styles.suggestionPill, { backgroundColor: pillBg, borderColor: pillBorder }]}
                     onPress={() => handleSendText(item.query)}
                     activeOpacity={0.8}
                   >
                     {item.icon}
-                    <Text style={styles.suggestionPillText}>{item.label}</Text>
+                    <Text style={[styles.suggestionPillText, { color: pillText }]}>{item.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1264,6 +1324,7 @@ export default function AiSupportScreen() {
                 onCertComplete={handleCertComplete}
                 onSelectVipPkg={handleSelectVipPkg}
                 userEmail={userState.user?.email}
+                isLight={isLight}
               />
             ))}
           </Animated.View>
@@ -1277,12 +1338,12 @@ export default function AiSupportScreen() {
               {suggestions.map((item, i) => (
                 <TouchableOpacity
                   key={i}
-                  style={styles.quickBarBtn}
+                  style={[styles.quickBarBtn, { backgroundColor: pillBg, borderColor: pillBorder }]}
                   onPress={() => handleSendText(item.query)}
                   activeOpacity={0.8}
                 >
                   {item.icon}
-                  <Text style={styles.quickBarText}>{item.label}</Text>
+                  <Text style={[styles.quickBarText, { color: pillText }]}>{item.label}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -1296,6 +1357,7 @@ export default function AiSupportScreen() {
               onSubmit={handleSend}
               orbState={orbState}
               onFocusChange={setIsInputFocused}
+              isLight={isLight}
             />
           </View>
         </Animated.View>
@@ -1311,7 +1373,6 @@ export default function AiSupportScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: S.void,
   },
 
   // Header
@@ -1324,7 +1385,6 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 44 : 20,
     zIndex: 200,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
   },
   headerInner: {
@@ -1338,9 +1398,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1350,7 +1408,6 @@ const styles = StyleSheet.create({
   headerTitleText: {
     fontSize: 15,
     fontWeight: '900',
-    color: S.text,
     letterSpacing: -0.3,
   },
   statusChip: {
@@ -1367,7 +1424,6 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 11,
     fontWeight: '600',
-    color: S.textSecondary,
   },
 
   // Orb Header Box
@@ -1395,7 +1451,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.3)',
     shadowColor: S.cyan,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
@@ -1413,14 +1468,12 @@ const styles = StyleSheet.create({
   heroTitleText: {
     fontSize: 24,
     fontWeight: '900',
-    color: S.text,
     textAlign: 'center',
     letterSpacing: -0.5,
   },
   heroSubText: {
     fontSize: 13,
     fontWeight: '500',
-    color: S.textSecondary,
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 20,
@@ -1443,9 +1496,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 11,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
     shadowColor: '#00F0FF',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -1455,7 +1506,6 @@ const styles = StyleSheet.create({
   suggestionPillText: {
     fontSize: 12,
     fontWeight: '800',
-    color: S.text,
   },
 
   // User Message
@@ -1465,9 +1515,7 @@ const styles = StyleSheet.create({
     maxWidth: '84%',
   },
   userEntityInner: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
     borderRadius: 22,
     borderBottomRightRadius: 6,
     paddingHorizontal: 18,
@@ -1476,7 +1524,7 @@ const styles = StyleSheet.create({
   userEntityText: {
     fontSize: 14,
     fontWeight: '600',
-    color: S.text,
+    color: '#FFFFFF',
     lineHeight: 22,
   },
 
@@ -1494,25 +1542,20 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: S.cyan,
   },
   intentLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: S.cyan,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   entityTime: {
     fontSize: 10,
     fontWeight: '600',
-    color: S.textTertiary,
     marginLeft: 'auto',
   },
   entityContent: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
     borderRadius: 22,
     borderTopLeftRadius: 6,
     paddingHorizontal: 18,
@@ -1522,13 +1565,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     fontWeight: '500',
-    color: S.textPrimary,
   },
   wordToken: {
     fontSize: 14,
     lineHeight: 22,
     fontWeight: '500',
-    color: S.textPrimary,
   },
 
   // Embedded Widget Box
@@ -1536,7 +1577,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
     padding: 16,
     overflow: 'hidden',
   },
@@ -1549,7 +1589,6 @@ const styles = StyleSheet.create({
   widgetTitleText: {
     fontSize: 12,
     fontWeight: '900',
-    color: S.cyan,
     letterSpacing: 0.5,
   },
   widgetPickBtn: {
@@ -1559,14 +1598,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   widgetPickBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: S.textSecondary,
     flex: 1,
   },
   widgetInputRow: {
@@ -1576,16 +1612,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 46,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
     marginTop: 10,
   },
   widgetTextInput: {
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
-    color: S.text,
     height: '100%',
     padding: 0,
   },
@@ -1602,7 +1635,6 @@ const styles = StyleSheet.create({
   widgetSubmitBtnText: {
     fontSize: 13,
     fontWeight: '900',
-    color: S.void,
     letterSpacing: 0.2,
   },
 
@@ -1619,12 +1651,10 @@ const styles = StyleSheet.create({
   bankLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: S.textSecondary,
   },
   bankValBold: {
     fontSize: 13,
     fontWeight: '800',
-    color: S.textPrimary,
   },
   bankValHighlight: {
     fontSize: 14,
@@ -1638,9 +1668,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 10,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
   },
   copyBtnPill: {
     flexDirection: 'row',
@@ -1649,12 +1677,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   copyBtnText: {
     fontSize: 11,
     fontWeight: '800',
-    color: S.text,
   },
 
   // VIP Package Cards Widget
@@ -1663,19 +1689,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   vipPkgName: {
     fontSize: 14,
     fontWeight: '900',
-    color: S.text,
   },
   vipPkgDesc: {
     fontSize: 11,
     fontWeight: '500',
-    color: S.textSecondary,
     marginTop: 3,
   },
   vipPkgPriceBox: {
@@ -1684,13 +1706,10 @@ const styles = StyleSheet.create({
   vipPkgPriceText: {
     fontSize: 14,
     fontWeight: '900',
-    color: S.cyan,
   },
   vipPkgBuyText: {
     fontSize: 11,
     fontWeight: '800',
-    color: S.void,
-    backgroundColor: S.text,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
@@ -1706,7 +1725,7 @@ const styles = StyleSheet.create({
   bestTagText: {
     fontSize: 9,
     fontWeight: '900',
-    color: S.void,
+    color: '#000000',
   },
 
   // App Cards Row
@@ -1721,7 +1740,6 @@ const styles = StyleSheet.create({
   spatialCard: {
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
     padding: 14,
     overflow: 'hidden',
   },
@@ -1741,13 +1759,11 @@ const styles = StyleSheet.create({
   cardName: {
     fontSize: 13,
     fontWeight: '900',
-    color: S.text,
     letterSpacing: -0.2,
   },
   cardCategory: {
     fontSize: 11,
     fontWeight: '600',
-    color: S.textSecondary,
     marginTop: 2,
   },
   cardRating: {
@@ -1786,14 +1802,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    backgroundColor: S.cyan,
     paddingVertical: 8,
     borderRadius: 14,
   },
   cardButtonText: {
     fontSize: 12,
     fontWeight: '900',
-    color: S.void,
   },
 
   // Action Chips
@@ -1837,14 +1851,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   quickBarText: {
     fontSize: 12,
     fontWeight: '700',
-    color: S.textPrimary,
   },
 
   // Input Dock
@@ -1860,7 +1871,6 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 27,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.08)',
     paddingLeft: 20,
     paddingRight: 8,
     overflow: 'hidden',
@@ -1874,7 +1884,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
-    color: S.text,
     height: '100%',
     padding: 0,
   },
