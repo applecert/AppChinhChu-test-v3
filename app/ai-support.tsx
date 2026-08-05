@@ -938,54 +938,56 @@ export default function AiSupportScreen() {
 
       {/* Main Content Area */}
       <View style={{ flex: 1, paddingTop: Platform.OS === 'ios' ? 94 : 70 }}>
-        <ScrollView
-          ref={scrollViewRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 140 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Energy Orb Header */}
-          <View style={styles.orbHeaderBox}>
-            <EnergyOrb state={orbState} />
+        <Animated.View style={[{ flex: 1 }, animatedDockStyle]}>
+          <ScrollView
+            ref={scrollViewRef}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 140 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Energy Orb Header */}
+            <View style={styles.orbHeaderBox}>
+              <EnergyOrb state={orbState} />
+              {messages.length === 0 && (
+                <View style={styles.heroTextBox}>
+                  <Text style={styles.heroTitleText}>
+                    Xin chào, <Text style={{ color: S.cyan }}>{userState.user?.displayName || 'Sếp'}</Text>
+                  </Text>
+                  <Text style={styles.heroSubText}>
+                    Hệ thống Trợ lý Ảo Spatial Intelligence đã sẵn sàng hỗ trợ ký App, nạp xu và tra cứu dữ liệu.
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Quick Suggestions Grid when no messages */}
             {messages.length === 0 && (
-              <View style={styles.heroTextBox}>
-                <Text style={styles.heroTitleText}>
-                  Xin chào, <Text style={{ color: S.cyan }}>{userState.user?.displayName || 'Sếp'}</Text>
-                </Text>
-                <Text style={styles.heroSubText}>
-                  Hệ thống Trợ lý Ảo Spatial Intelligence đã sẵn sàng hỗ trợ ký App, nạp xu và tra cứu dữ liệu.
-                </Text>
+              <View style={styles.suggestionGrid}>
+                {suggestions.map((item, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.suggestionPill}
+                    onPress={() => handleSendText(item.query)}
+                    activeOpacity={0.8}
+                  >
+                    {item.icon}
+                    <Text style={styles.suggestionPillText}>{item.label}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
-          </View>
 
-          {/* Quick Suggestions Grid when no messages */}
-          {messages.length === 0 && (
-            <View style={styles.suggestionGrid}>
-              {suggestions.map((item, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.suggestionPill}
-                  onPress={() => handleSendText(item.query)}
-                  activeOpacity={0.8}
-                >
-                  {item.icon}
-                  <Text style={styles.suggestionPillText}>{item.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Messages Entities */}
-          {messages.map((m) => (
-            <MessageEntity
-              key={m.id}
-              message={m}
-              onAction={handleAction}
-              onAppPress={handleAppPress}
-            />
-          ))}
-        </ScrollView>
+            {/* Messages Entities */}
+            {messages.map((m) => (
+              <MessageEntity
+                key={m.id}
+                message={m}
+                onAction={handleAction}
+                onAppPress={handleAppPress}
+              />
+            ))}
+          </ScrollView>
+        </Animated.View>
 
         {/* Animated Floating Bottom Dock (Input + Quick Suggestions with Smooth 120Hz Reanimated Slide-Up) */}
         <Animated.View style={[styles.bottomFloatingDock, animatedDockStyle]}>
