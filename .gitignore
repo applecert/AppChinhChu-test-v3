@@ -4,3 +4,7 @@ dist/
 *.p12
 *.mobileprovision
 google_apps_script.js
+scratch/
+*.app/
+*.zip
+game asset/
