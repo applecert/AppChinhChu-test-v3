@@ -183,6 +183,14 @@ jobs:
             OTHER_CFLAGS="-Wno-error" \
             clean build 2>&1 | tee build.log
 
+      - name: Show Diagnostics on Failure
+        if: failure()
+        run: |
+          echo "=== SCANNING ERRORS IN BUILD LOG ==="
+          grep -E "error:" build.log || true
+          echo "=== LAST 100 LINES OF BUILD LOG ==="
+          tail -n 100 build.log || true
+
       - name: Package IPA
         run: |
           mkdir -p Payload
