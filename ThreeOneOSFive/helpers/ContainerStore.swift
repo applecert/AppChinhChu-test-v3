@@ -411,30 +411,26 @@ enum ContainerStore {
         }
 
         let fileManager = FileManager.default
-        let traversed = enumerateDirectoriesWithTraversalGrant(path: rootPath)
-        let rootEntries = traversed.isEmpty ? enumerateDirectories(path: rootPath) : traversed
-        let rootNames = rootEntries.map { ($0 as NSString).lastPathComponent }
-        let directEntries = (try? fileManager.contentsOfDirectory(atPath: rootPath)) ?? []
-        let combinedEntries = Array(Set(rootNames + directEntries))
-        guard !combinedEntries.isEmpty else {
-            log("browser: app-bundle metadata unavailable root=\(rootPath) grant=\(handle)")
+        let rootEntries = (try? fileManager.contentsOfDirectory(atPath: rootPath)) ?? []
+        guard !rootEntries.isEmpty else {
             return []
         }
 
         let bundlePaths: [String]
         if nested {
-            bundlePaths = combinedEntries.prefix(512).flatMap { entry -> [String] in
+            bundlePaths = rootEntries.prefix(128).flatMap { entry -> [String] in
                 guard UUID(uuidString: entry) != nil else { return [] }
                 let containerPath = (rootPath as NSString).appendingPathComponent(entry)
-                let subDirs = enumerateDirectories(path: containerPath)
-                let children = subDirs.isEmpty ? ((try? fileManager.contentsOfDirectory(atPath: containerPath)) ?? []) : subDirs.map { ($0 as NSString).lastPathComponent }
-                return children.prefix(8).compactMap { child in
+                let subhandle = grantContainerAccess(containerPath)
+                defer { if subhandle >= 0 { bad_query_release(subhandle) } }
+                let children = (try? fileManager.contentsOfDirectory(atPath: containerPath)) ?? []
+                return children.prefix(4).compactMap { child in
                     guard child.hasSuffix(".app") else { return nil }
                     return (containerPath as NSString).appendingPathComponent(child)
                 }
             }
         } else {
-            bundlePaths = combinedEntries.prefix(512).compactMap { entry in
+            bundlePaths = rootEntries.prefix(128).compactMap { entry in
                 guard entry.hasSuffix(".app") else { return nil }
                 return (rootPath as NSString).appendingPathComponent(entry)
             }
@@ -456,96 +452,7 @@ enum ContainerStore {
     }
 
     static func launchServicesStoreIdentifiers() -> [String] {
-        var cachePaths: [String] = []
-        var seenCachePaths = Set<String>()
-
-        func addCachePath(_ rawPath: String) {
-            let path = ContainerDiscoveryMerger.canonicalPath(rawPath)
-            guard !path.isEmpty, seenCachePaths.insert(path).inserted else { return }
-            cachePaths.append(path)
-        }
-
-        var leasedCachePaths = Set<String>()
-        var serviceLookupError: NSString?
-        if let servicePath = MCMActivateContainerPath(
-            10,
-            "com.apple.lsd",
-            false,
-            &serviceLookupError
-        ) {
-            let cachePath = (servicePath as NSString).appendingPathComponent("Library/Caches")
-            addCachePath(cachePath)
-            leasedCachePaths.insert(ContainerDiscoveryMerger.canonicalPath(cachePath))
-        } else if shouldUseBadQuery {
-            let detail = serviceLookupError.map { String($0) } ?? "no path"
-            log("browser: MCM com.apple.lsd activation unavailable detail=\(detail)")
-        }
-
-        let traversedSystemDirectories = enumerateDirectoriesWithTraversalGrant(path: systemDataRoot)
-        let systemDirectories = traversedSystemDirectories.isEmpty
-            ? enumerateDirectories(path: systemDataRoot)
-            : traversedSystemDirectories
-        for directory in systemDirectories {
-            // Attempt the raw metadata read even without a traversal grant:
-            // it succeeds when the sandbox escape is active, which is the
-            // only path left when MCM/bad_query grants are denied.
-            guard readContainerMetadata(containerPath: directory)?.bundleID == "com.apple.lsd" else {
-                continue
-            }
-            addCachePath((directory as NSString).appendingPathComponent("Library/Caches"))
-        }
-
-        // Older and Simulator layouts keep the same store outside the MCM
-        // service-container layout. They are harmless fallbacks on device.
-        addCachePath("/var/db/lsd")
-        addCachePath("/var/mobile/Library/Caches")
-
-        var identifiers: [String] = []
-        var seenIdentifiers = Set<String>()
-        let maximumCandidateCount = 2_048
-
-        for cachePath in cachePaths where identifiers.count < maximumCandidateCount {
-            let hasLease = leasedCachePaths.contains(
-                ContainerDiscoveryMerger.canonicalPath(cachePath)
-            )
-            let handle: Int64
-            if hasLease || !shouldUseBadQuery {
-                handle = -1
-            } else {
-                handle = grantContainerAccess(cachePath)
-                if handle < 0 {
-                    log("browser: LaunchServices traversal grant failed \(cachePath) -> \(handle)")
-                    continue
-                }
-            }
-            defer {
-                if handle >= 0 { bad_query_release(handle) }
-            }
-
-            let names = (try? FileManager.default.contentsOfDirectory(atPath: cachePath)) ?? []
-            for name in names where identifiers.count < maximumCandidateCount {
-                guard name.hasPrefix("com.apple.LaunchServices-"),
-                      name.hasSuffix("-v2.csstore") else {
-                    continue
-                }
-                let storePath = (cachePath as NSString).appendingPathComponent(name)
-                guard let size = (try? FileManager.default.attributesOfItem(atPath: storePath)[.size]) as? NSNumber,
-                      size.uint64Value > 0,
-                      size.uint64Value <= 64 * 1_024 * 1_024,
-                      let data = try? Data(contentsOf: URL(fileURLWithPath: storePath), options: .mappedIfSafe) else {
-                    continue
-                }
-                let remaining = maximumCandidateCount - identifiers.count
-                let extracted = LaunchServicesCandidateExtractor.identifiers(from: data, limit: remaining)
-                for identifier in extracted where seenIdentifiers.insert(identifier).inserted {
-                    identifiers.append(identifier)
-                }
-                log("browser: LaunchServices store \(name) bytes=\(data.count) candidates=\(identifiers.count)")
-            }
-        }
-
-        log("browser: LaunchServices store total candidates=\(identifiers.count)")
-        return identifiers
+        return []
     }
 
     static func isApplicationContainerPath(_ path: String) -> Bool {
@@ -557,47 +464,27 @@ enum ContainerStore {
 
     // MARK: Filesystem discovery
 
-    static func enumerateDirectories(path: String, maxInode: Int64 = 20_000_000) -> [String] {
+    static func enumerateDirectories(path: String) -> [String] {
         let clean = path.hasSuffix("/") ? String(path.dropLast()) : path
         guard clean.hasPrefix("/") else { return [] }
 
-        if let names = try? FileManager.default.contentsOfDirectory(atPath: clean), !names.isEmpty {
+        if let names = try? FileManager.default.contentsOfDirectory(atPath: clean) {
             return names.map { (clean as NSString).appendingPathComponent($0) }
         }
 
         let handle = grantContainerAccess(clean)
         if handle >= 0 {
             defer { bad_query_release(handle) }
-            if let names = try? FileManager.default.contentsOfDirectory(atPath: clean), !names.isEmpty {
+            if let names = try? FileManager.default.contentsOfDirectory(atPath: clean) {
                 return names.map { (clean as NSString).appendingPathComponent($0) }
             }
         }
 
-        var pathC = clean.utf8CString.map { Int8($0) }
-        guard let result = bad_query_list(&pathC, maxInode) else {
-            log("enumerate: NULL for \(clean)")
-            return []
-        }
-        defer { free(result) }
-        let list = String(cString: result).components(separatedBy: "\n").filter { !$0.isEmpty }
-        if !list.isEmpty {
-            log("enumerate: inode fallback for \(clean) -> \(list.count) entries")
-        } else {
-            log("enumerate: FileManager+inode unavailable for \(clean)")
-        }
-        return list
+        return []
     }
 
     static func enumerateDirectoriesWithTraversalGrant(path: String) -> [String] {
-        let clean = path.hasSuffix("/") ? String(path.dropLast()) : path
-        let handle = grantContainerAccess(clean)
-        if handle >= 0 {
-            defer { bad_query_release(handle) }
-            if let names = try? FileManager.default.contentsOfDirectory(atPath: clean), !names.isEmpty {
-                return names.map { (clean as NSString).appendingPathComponent($0) }
-            }
-        }
-        return enumerateDirectories(path: clean)
+        return enumerateDirectories(path: path)
     }
 
     static func readContainerMetadata(containerPath: String) -> ContainerMetadata? {

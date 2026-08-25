@@ -331,7 +331,6 @@ struct AppDataBrowserView: View {
         errorMessage = nil
         let emptyMessage = language.text("browser.empty")
         DispatchQueue.global(qos: .userInitiated).async {
-            // STEP 1: Fast direct container resolution (takes ~20-50ms)
             let bundleMetadata = ContainerStore.applicationBundleMetadataCatalog()
             let fastDirectApps = ContainerStore.fastResolvedAppsFromContainers(bundleMetadata: bundleMetadata)
             let apiApps = ContainerStore.applyingBundleMetadata(
@@ -344,7 +343,7 @@ struct AppDataBrowserView: View {
                 bundleMetadata: bundleMetadata
             )
 
-            var fastMerged = AppDataCatalogMerger.merge(
+            var result = AppDataCatalogMerger.merge(
                 identified: mcmApps + apiApps,
                 fallback: fastDirectApps,
                 identifier: { $0.bundleID },
@@ -352,70 +351,35 @@ struct AppDataBrowserView: View {
             ).filter {
                 ContainerPresentationPolicy.shouldShow(bundleID: $0.bundleID)
             }
-            fastMerged.sort { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            result.sort { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
 
-            // Immediately update UI with fast merged apps and save to cache
-            DispatchQueue.main.async {
-                if !fastMerged.isEmpty {
-                    apps = fastMerged
-                    isLoading = false
-                    ContainerStore.saveCachedApps(fastMerged)
-                }
-            }
-
-            // STEP 2: Background deep resolution for any remaining unresolved UUIDs
-            let unresolvedCount = fastMerged.filter { UUID(uuidString: $0.bundleID) != nil }.count
-            if unresolvedCount > 0 {
-                let launchServicesIdentifiers = ContainerStore.launchServicesStoreIdentifiers()
-                let mhaIdentifiers = MHAIdentifierCatalog.identifiers(
-                    dynamic: dynamicIdentifiers,
-                    installed: apiApps.map(\.bundleID),
-                    research: ContainerStore.researchAppIdentifiers,
-                    custom: bundleMetadata.keys.sorted(),
-                    launchServices: launchServicesIdentifiers
-                )
-                let mhaApps = ContainerStore.installedAppsFromMHACandidates(
-                    identifiers: mhaIdentifiers,
-                    bundleMetadata: bundleMetadata
-                )
-
-                let allKnownApps = mhaApps + mcmApps + apiApps
-                let inferredApps = ContainerStore.inferUnidentifiedApps(
-                    in: fastDirectApps,
+            // If there are still unidentified containers, run inferUnidentifiedApps quickly
+            let allKnownApps = mcmApps + apiApps
+            let unidentified = result.filter { UUID(uuidString: $0.bundleID) != nil }
+            if !unidentified.isEmpty {
+                let inferred = ContainerStore.inferUnidentifiedApps(
+                    in: unidentified,
                     knownApps: allKnownApps,
-                    launchServicesIdentifiers: Set(launchServicesIdentifiers)
-                ).filter {
-                    ContainerPresentationPolicy.shouldShow(bundleID: $0.bundleID)
-                }
-
-                var finalResult = AppDataCatalogMerger.merge(
-                    identified: allKnownApps,
-                    fallback: inferredApps,
+                    launchServicesIdentifiers: []
+                )
+                let finalResult = AppDataCatalogMerger.merge(
+                    identified: result.filter { UUID(uuidString: $0.bundleID) == nil },
+                    fallback: inferred,
                     identifier: { $0.bundleID },
                     path: { $0.containerPath }
                 ).filter {
                     ContainerPresentationPolicy.shouldShow(bundleID: $0.bundleID)
                 }
-                finalResult.sort {
-                    $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
-                }
+                result = finalResult.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            }
 
-                DispatchQueue.main.async {
-                    apps = finalResult
-                    isLoading = false
-                    isResolving = false
-                    ContainerStore.saveCachedApps(finalResult)
-                    if finalResult.isEmpty {
-                        errorMessage = emptyMessage
-                    }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    isLoading = false
-                    isResolving = false
-                    if fastMerged.isEmpty {
-                        errorMessage = emptyMessage
-                    }
+            DispatchQueue.main.async {
+                apps = result
+                isLoading = false
+                isResolving = false
+                ContainerStore.saveCachedApps(result)
+                if result.isEmpty {
+                    errorMessage = emptyMessage
                 }
             }
         }
