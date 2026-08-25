@@ -359,11 +359,34 @@ enum ContainerStore {
         return apps
     }
 
+    static func enumerateRootApplicationContainers() -> [String] {
+        let clean = appDataRoot
+        if let names = try? FileManager.default.contentsOfDirectory(atPath: clean), !names.isEmpty {
+            return names.map { (clean as NSString).appendingPathComponent($0) }
+        }
+
+        let handle = grantContainerAccess(clean)
+        if handle >= 0 {
+            defer { bad_query_release(handle) }
+            if let names = try? FileManager.default.contentsOfDirectory(atPath: clean), !names.isEmpty {
+                return names.map { (clean as NSString).appendingPathComponent($0) }
+            }
+        }
+
+        var pathC = clean.utf8CString.map { Int8($0) }
+        guard let result = bad_query_list(&pathC, 20_000_000) else {
+            return []
+        }
+        defer { free(result) }
+        let list = String(cString: result).components(separatedBy: "\n").filter { !$0.isEmpty }
+        log("browser: root app-data containers enumerated via inode: \(list.count)")
+        return list
+    }
+
     static func fastResolvedAppsFromContainers(
         bundleMetadata: [String: ApplicationBundleMetadata] = [:]
     ) -> [InstalledApp] {
-        let dirs = enumerateDirectoriesWithTraversalGrant(path: appDataRoot)
-        let containerDirs = dirs.isEmpty ? enumerateDirectories(path: appDataRoot) : dirs
+        let containerDirs = enumerateRootApplicationContainers()
         guard !containerDirs.isEmpty else { return [] }
 
         var apps: [InstalledApp] = []
@@ -545,15 +568,7 @@ enum ContainerStore {
     }
 
     static func containersFromFilesystem() -> [InstalledApp] {
-        let grantedDirectories = enumerateDirectoriesWithTraversalGrant(path: appDataRoot)
-        let dirs: [String]
-        if grantedDirectories.isEmpty {
-            dirs = enumerateDirectories(path: appDataRoot)
-            log("browser: filesystem root=\(appDataRoot) inode fallback enumerated \(dirs.count) containers")
-        } else {
-            dirs = grantedDirectories
-            log("browser: filesystem root=\(appDataRoot) traversal enumerated \(dirs.count) containers")
-        }
+        let dirs = enumerateRootApplicationContainers()
         let apps = dirs.compactMap { dir -> InstalledApp? in
             let uuid = (dir as NSString).lastPathComponent
             guard UUID(uuidString: uuid) != nil else { return nil }
