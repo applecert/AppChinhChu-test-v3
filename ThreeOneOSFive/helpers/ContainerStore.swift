@@ -20,6 +20,13 @@ struct InstalledApp: Identifiable, Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
+struct CachedAppRecord: Codable, Equatable {
+    let bundleID: String
+    let name: String
+    let containerPath: String
+    let version: String
+}
+
 struct FileEntry: Identifiable, Hashable {
     let name: String
     let path: String
@@ -38,6 +45,7 @@ struct FileEntry: Identifiable, Hashable {
 enum ContainerStore {
     static let appDataRoot = "/var/mobile/Containers/Data/Application"
     static let systemDataRoot = "/var/mobile/Containers/Data/System"
+    private static let cacheKey = "ThreeOneOSFive_ResolvedAppsCache_v1"
     private static var shouldUseBadQuery: Bool {
         true
     }
@@ -60,6 +68,40 @@ enum ContainerStore {
         "com.apple.VoiceMemos", "com.apple.Translate", "com.apple.measure",
         "com.apple.compass", "com.apple.Magnifier", "com.apple.DocumentsApp"
     ]
+
+    // MARK: - Cache
+
+    static func loadCachedApps() -> [InstalledApp] {
+        guard let data = UserDefaults.standard.data(forKey: cacheKey),
+              let records = try? JSONDecoder().decode([CachedAppRecord].self, from: data),
+              !records.isEmpty else {
+            return []
+        }
+        return records.map { record in
+            InstalledApp(
+                bundleID: record.bundleID,
+                name: record.name,
+                containerPath: record.containerPath,
+                version: record.version,
+                icon: iconForBundleID(record.bundleID)
+            )
+        }
+    }
+
+    static func saveCachedApps(_ apps: [InstalledApp]) {
+        guard !apps.isEmpty else { return }
+        let records = apps.map {
+            CachedAppRecord(
+                bundleID: $0.bundleID,
+                name: $0.displayName,
+                containerPath: $0.containerPath,
+                version: $0.version
+            )
+        }
+        if let data = try? JSONEncoder().encode(records) {
+            UserDefaults.standard.set(data, forKey: cacheKey)
+        }
+    }
 
     static func resolveAppContainerPath(bundleID: String) -> String? {
         let cleanID = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -308,6 +350,57 @@ enum ContainerStore {
         return apps
     }
 
+    static func fastResolvedAppsFromContainers(
+        bundleMetadata: [String: ApplicationBundleMetadata] = [:]
+    ) -> [InstalledApp] {
+        let dirs = enumerateDirectoriesWithTraversalGrant(path: appDataRoot)
+        let containerDirs = dirs.isEmpty ? enumerateDirectories(path: appDataRoot) : dirs
+        guard !containerDirs.isEmpty else { return [] }
+
+        var apps: [InstalledApp] = []
+        for dir in containerDirs {
+            let uuid = (dir as NSString).lastPathComponent
+            guard UUID(uuidString: uuid) != nil else { continue }
+
+            // 1. Direct metadata plist read
+            if let metadata = readContainerMetadata(containerPath: dir) {
+                let bundleID = metadata.bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+                if ContainerBundleCandidateResolver.isValidBundleIdentifier(bundleID),
+                   !bundleID.hasPrefix("systemgroup.") {
+                    let info = appInfoForBundleID(bundleID) as? [String: Any] ?? [:]
+                    let bundleMeta = bundleMetadata[bundleID]
+                    let resolvedName = AppDisplayNamePolicy.resolve(
+                        bundleID: bundleID,
+                        candidates: [
+                            bundleMeta?.displayName,
+                            metadata.displayName.isEmpty ? nil : metadata.displayName,
+                            info["name"] as? String
+                        ]
+                    )
+                    apps.append(InstalledApp(
+                        bundleID: bundleID,
+                        name: resolvedName,
+                        containerPath: dir,
+                        version: info["version"] as? String ?? bundleMeta?.version ?? "",
+                        icon: (info["icon"] as? UIImage) ?? iconForBundleID(bundleID)
+                    ))
+                    continue
+                }
+            }
+
+            // 2. Fallback candidate identity
+            let fallback = ContainerIdentityResolver.fallbackIdentity(containerPath: dir)
+            apps.append(InstalledApp(
+                bundleID: fallback.bundleID,
+                name: fallback.displayName,
+                containerPath: dir,
+                version: "",
+                icon: nil
+            ))
+        }
+        return apps
+    }
+
     private static func applicationBundleMetadata(
         at rootPath: String,
         nested: Bool
@@ -318,24 +411,30 @@ enum ContainerStore {
         }
 
         let fileManager = FileManager.default
-        guard let rootEntries = try? fileManager.contentsOfDirectory(atPath: rootPath) else {
+        let traversed = enumerateDirectoriesWithTraversalGrant(path: rootPath)
+        let rootEntries = traversed.isEmpty ? enumerateDirectories(path: rootPath) : traversed
+        let rootNames = rootEntries.map { ($0 as NSString).lastPathComponent }
+        let directEntries = (try? fileManager.contentsOfDirectory(atPath: rootPath)) ?? []
+        let combinedEntries = Array(Set(rootNames + directEntries))
+        guard !combinedEntries.isEmpty else {
             log("browser: app-bundle metadata unavailable root=\(rootPath) grant=\(handle)")
             return []
         }
 
         let bundlePaths: [String]
         if nested {
-            bundlePaths = rootEntries.prefix(2_048).flatMap { entry -> [String] in
+            bundlePaths = combinedEntries.prefix(512).flatMap { entry -> [String] in
                 guard UUID(uuidString: entry) != nil else { return [] }
                 let containerPath = (rootPath as NSString).appendingPathComponent(entry)
-                let children = (try? fileManager.contentsOfDirectory(atPath: containerPath)) ?? []
-                return children.prefix(16).compactMap { child in
+                let subDirs = enumerateDirectories(path: containerPath)
+                let children = subDirs.isEmpty ? ((try? fileManager.contentsOfDirectory(atPath: containerPath)) ?? []) : subDirs.map { ($0 as NSString).lastPathComponent }
+                return children.prefix(8).compactMap { child in
                     guard child.hasSuffix(".app") else { return nil }
                     return (containerPath as NSString).appendingPathComponent(child)
                 }
             }
         } else {
-            bundlePaths = rootEntries.prefix(2_048).compactMap { entry in
+            bundlePaths = combinedEntries.prefix(512).compactMap { entry in
                 guard entry.hasSuffix(".app") else { return nil }
                 return (rootPath as NSString).appendingPathComponent(entry)
             }
@@ -403,7 +502,7 @@ enum ContainerStore {
 
         var identifiers: [String] = []
         var seenIdentifiers = Set<String>()
-        let maximumCandidateCount = 65_536
+        let maximumCandidateCount = 2_048
 
         for cachePath in cachePaths where identifiers.count < maximumCandidateCount {
             let hasLease = leasedCachePaths.contains(
@@ -611,8 +710,10 @@ enum ContainerStore {
         let libraryPath = (fallback.containerPath as NSString).appendingPathComponent("Library")
         let savedStatePath = (libraryPath as NSString).appendingPathComponent("Saved Application State")
         let preferencesPath = (libraryPath as NSString).appendingPathComponent("Preferences")
-        let savedStates = (try? FileManager.default.contentsOfDirectory(atPath: savedStatePath)) ?? []
-        let preferences = (try? FileManager.default.contentsOfDirectory(atPath: preferencesPath)) ?? []
+        let savedStatesDirs = enumerateDirectories(path: savedStatePath)
+        let savedStates = savedStatesDirs.isEmpty ? ((try? FileManager.default.contentsOfDirectory(atPath: savedStatePath)) ?? []) : savedStatesDirs.map { ($0 as NSString).lastPathComponent }
+        let preferencesDirs = enumerateDirectories(path: preferencesPath)
+        let preferences = preferencesDirs.isEmpty ? ((try? FileManager.default.contentsOfDirectory(atPath: preferencesPath)) ?? []) : preferencesDirs.map { ($0 as NSString).lastPathComponent }
         let strongCandidates = ContainerBundleCandidateResolver.candidates(
             savedStateNames: savedStates,
             preferenceFileNames: []
