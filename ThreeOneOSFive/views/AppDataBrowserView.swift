@@ -329,7 +329,6 @@ struct AppDataBrowserView: View {
         }
         isResolving = true
         errorMessage = nil
-        let emptyMessage = language.text("browser.empty")
         DispatchQueue.global(qos: .userInitiated).async {
             let bundleMetadata = ContainerStore.applicationBundleMetadataCatalog()
             let fastDirectApps = ContainerStore.fastResolvedAppsFromContainers(bundleMetadata: bundleMetadata)
@@ -343,9 +342,25 @@ struct AppDataBrowserView: View {
                 bundleMetadata: bundleMetadata
             )
 
+            // Fast candidate resolution via MCM MobileHouseArrest
+            let candidateIdentifiers = MHAIdentifierCatalog.identifiers(
+                dynamic: dynamicIdentifiers,
+                installed: apiApps.map(\.bundleID),
+                research: ContainerStore.researchAppIdentifiers,
+                custom: bundleMetadata.keys.sorted(),
+                launchServices: []
+            )
+            let mhaApps = ContainerStore.installedAppsFromMHACandidates(
+                identifiers: candidateIdentifiers,
+                bundleMetadata: bundleMetadata
+            )
+
+            let filesystemApps = ContainerStore.containersFromFilesystem()
+            let allKnownApps = mhaApps + mcmApps + apiApps
+
             var result = AppDataCatalogMerger.merge(
-                identified: mcmApps + apiApps,
-                fallback: fastDirectApps,
+                identified: allKnownApps,
+                fallback: fastDirectApps.isEmpty ? filesystemApps : fastDirectApps,
                 identifier: { $0.bundleID },
                 path: { $0.containerPath }
             ).filter {
@@ -354,7 +369,6 @@ struct AppDataBrowserView: View {
             result.sort { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
 
             // If there are still unidentified containers, run inferUnidentifiedApps quickly
-            let allKnownApps = mcmApps + apiApps
             let unidentified = result.filter { UUID(uuidString: $0.bundleID) != nil }
             if !unidentified.isEmpty {
                 let inferred = ContainerStore.inferUnidentifiedApps(
@@ -378,9 +392,6 @@ struct AppDataBrowserView: View {
                 isLoading = false
                 isResolving = false
                 ContainerStore.saveCachedApps(result)
-                if result.isEmpty {
-                    errorMessage = emptyMessage
-                }
             }
         }
     }

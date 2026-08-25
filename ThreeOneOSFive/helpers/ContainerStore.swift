@@ -66,7 +66,16 @@ enum ContainerStore {
         "com.apple.springboard", "com.apple.Photos", "com.apple.AppStore",
         "com.apple.Music", "com.apple.Bridge", "com.apple.Clock",
         "com.apple.VoiceMemos", "com.apple.Translate", "com.apple.measure",
-        "com.apple.compass", "com.apple.Magnifier", "com.apple.DocumentsApp"
+        "com.apple.compass", "com.apple.Magnifier", "com.apple.DocumentsApp",
+        "com.facebook.Facebook", "com.facebook.Messenger", "com.zhiliaoapp.musically",
+        "com.ss.iphone.ugc.Ame", "com.google.ios.youtube", "ph.telegra.Telegraph",
+        "com.vng.zalo", "com.burbn.instagram", "com.google.Chrome",
+        "com.spotify.client", "com.atebits.Tweetie2", "com.shopee.vn",
+        "com.lazada.vietnam", "com.grabtaxi.passenger", "com.tencent.xin",
+        "com.hammerandchisel.discord", "com.netflix.Netflix", "com.capcut.videoeditor",
+        "com.adobe.lumiere", "com.microsoft.Office.Word", "com.microsoft.Office.Excel",
+        "com.toyopagroup.picaboo", "com.skype.skype", "com.openai.chat",
+        "com.antigravity.ios", "com.applecert.AppChinhChu"
     ]
 
     // MARK: - Cache
