@@ -39,7 +39,7 @@ enum ContainerStore {
     static let appDataRoot = "/var/mobile/Containers/Data/Application"
     static let systemDataRoot = "/var/mobile/Containers/Data/System"
     private static var shouldUseBadQuery: Bool {
-        ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
+        true
     }
     private static let applicationBundleRoots: [(path: String, nested: Bool)] = [
         ("/var/containers/Bundle/Application", true),
@@ -458,12 +458,20 @@ enum ContainerStore {
 
     // MARK: Filesystem discovery
 
-    static func enumerateDirectories(path: String, maxInode: Int64 = 2_000_000) -> [String] {
+    static func enumerateDirectories(path: String, maxInode: Int64 = 20_000_000) -> [String] {
         let clean = path.hasSuffix("/") ? String(path.dropLast()) : path
         guard clean.hasPrefix("/") else { return [] }
 
         if let names = try? FileManager.default.contentsOfDirectory(atPath: clean), !names.isEmpty {
             return names.map { (clean as NSString).appendingPathComponent($0) }
+        }
+
+        let handle = grantContainerAccess(clean)
+        if handle >= 0 {
+            defer { bad_query_release(handle) }
+            if let names = try? FileManager.default.contentsOfDirectory(atPath: clean), !names.isEmpty {
+                return names.map { (clean as NSString).appendingPathComponent($0) }
+            }
         }
 
         var pathC = clean.utf8CString.map { Int8($0) }
@@ -482,28 +490,24 @@ enum ContainerStore {
     }
 
     static func enumerateDirectoriesWithTraversalGrant(path: String) -> [String] {
-        if !shouldUseBadQuery {
-            if let names = try? FileManager.default.contentsOfDirectory(atPath: path), !names.isEmpty {
-                return names.map { (path as NSString).appendingPathComponent($0) }
-            }
-            return enumerateDirectories(path: path)
-        }
-
-        let handle = grantContainerAccess(path)
+        let clean = path.hasSuffix("/") ? String(path.dropLast()) : path
+        let handle = grantContainerAccess(clean)
         if handle >= 0 {
             defer { bad_query_release(handle) }
-            if let names = try? FileManager.default.contentsOfDirectory(atPath: path), !names.isEmpty {
-                return names.map { (path as NSString).appendingPathComponent($0) }
+            if let names = try? FileManager.default.contentsOfDirectory(atPath: clean), !names.isEmpty {
+                return names.map { (clean as NSString).appendingPathComponent($0) }
             }
-        } else {
-            log("browser: root traversal grant failed \(path) -> \(handle)")
         }
-
-        return enumerateDirectories(path: path)
+        return enumerateDirectories(path: clean)
     }
 
     static func readContainerMetadata(containerPath: String) -> ContainerMetadata? {
         let metadataPath = metadataPath(for: containerPath)
+
+        let handle = grantContainerAccess(containerPath)
+        defer {
+            if handle >= 0 { bad_query_release(handle) }
+        }
 
         var data: Data?
         if let fd = fopen(metadataPath, "r") {
