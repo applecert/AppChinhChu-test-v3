@@ -234,7 +234,7 @@ enum AppDataCatalogMerger {
 
 enum ContainerPresentationPolicy {
     static func shouldShow(bundleID: String) -> Bool {
-        UUID(uuidString: bundleID) == nil
+        true
     }
 }
 
@@ -252,6 +252,9 @@ enum AppDisplayNamePolicy {
                 continue
             }
             return candidate
+        }
+        if let uuid = UUID(uuidString: fallback) {
+            return "Container " + String(uuid.uuidString.prefix(8))
         }
         return fallback
     }

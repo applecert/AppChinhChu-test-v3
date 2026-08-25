@@ -62,47 +62,92 @@ enum ContainerStore {
     ]
 
     static func resolveAppContainerPath(bundleID: String) -> String? {
-        guard (try? PatchPathValidator.canonicalBundleIdentifier(bundleID)) == bundleID else {
-            return nil
+        let cleanID = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanID.isEmpty else { return nil }
+
+        // If user passed a direct UUID or container path
+        if UUID(uuidString: cleanID) != nil {
+            let directPath = (appDataRoot as NSString).appendingPathComponent(cleanID)
+            let canonical = ContainerDiscoveryMerger.canonicalPath(directPath)
+            if isApplicationContainerPath(canonical) {
+                return canonical
+            }
         }
+
         var lookupError: NSString?
-        if let path = MCMActivateContainerPath(2, bundleID, false, &lookupError),
+        if let path = MCMActivateContainerPath(2, cleanID, false, &lookupError),
            isApplicationContainerPath(path) {
-            log("patch: MHA-C2 resolved \(bundleID)")
+            log("patch: MHA-C2 resolved \(cleanID)")
             return path
         }
         let detail = lookupError.map(String.init) ?? "unavailable"
-        log("patch: MHA-C2 could not resolve \(bundleID), detail=\(detail)")
+        log("patch: MHA-C2 could not resolve \(cleanID), detail=\(detail)")
 
         // Fallback for iOS builds where MCM refuses to hand out sandbox
         // tokens (e.g. iOS 18.1.x): scan the app-data root with the inode
-        // walk and read each container's MCM metadata plist directly. The
-        // raw reads only succeed when the sandbox escape is active.
-        if let scanned = resolveAppContainerPathByMetadataScan(bundleID: bundleID) {
-            log("patch: filesystem metadata scan resolved \(bundleID)")
+        // walk and read each container's MCM metadata plist directly.
+        if let scanned = resolveAppContainerPathByMetadataScan(bundleID: cleanID) {
+            log("patch: filesystem metadata scan resolved \(cleanID)")
             return scanned
         }
         return nil
     }
 
     static func resolveAppContainerPathByMetadataScan(bundleID: String) -> String? {
-        // iOS < 26: kernel R/W is enough, no need to require full sandbox escape
-        if KernelExploit.requiresSandboxEscape, !KernelExploit.hasSandboxAccess() {
-            log("patch: metadata scan skipped — sandbox access not active")
-            return nil
-        }
-        let dirs = enumerateDirectories(path: appDataRoot)
-        guard !dirs.isEmpty else {
+        let cleanTarget = bundleID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !cleanTarget.isEmpty else { return nil }
+
+        let dirs = enumerateDirectoriesWithTraversalGrant(path: appDataRoot)
+        let containerDirs = dirs.isEmpty ? enumerateDirectories(path: appDataRoot) : dirs
+        guard !containerDirs.isEmpty else {
             log("patch: metadata scan unavailable — no containers enumerated")
             return nil
         }
-        for dir in dirs {
-            guard UUID(uuidString: (dir as NSString).lastPathComponent) != nil else { continue }
-            guard let metadata = readContainerMetadata(containerPath: dir),
-                  metadata.bundleID == bundleID else { continue }
-            let canonical = ContainerDiscoveryMerger.canonicalPath(dir)
-            guard isApplicationContainerPath(canonical) else { continue }
-            return canonical
+        for dir in containerDirs {
+            let uuid = (dir as NSString).lastPathComponent
+            guard UUID(uuidString: uuid) != nil else { continue }
+
+            let handle = grantContainerAccess(dir)
+            defer {
+                if handle >= 0 { bad_query_release(handle) }
+            }
+
+            // 1. Try reading metadata plist
+            if let metadata = readContainerMetadata(containerPath: dir) {
+                let foundID = metadata.bundleID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if foundID == cleanTarget {
+                    let canonical = ContainerDiscoveryMerger.canonicalPath(dir)
+                    if isApplicationContainerPath(canonical) { return canonical }
+                }
+            }
+
+            // 2. Fallback: inspect Library/Preferences/<bundleID>.plist
+            let prefPath = ((dir as NSString).appendingPathComponent("Library/Preferences") as NSString)
+                .appendingPathComponent("\(bundleID).plist")
+            if FileManager.default.fileExists(atPath: prefPath) {
+                let canonical = ContainerDiscoveryMerger.canonicalPath(dir)
+                if isApplicationContainerPath(canonical) { return canonical }
+            }
+
+            // 3. Fallback: inspect Library/Saved Application State/<bundleID>.savedState
+            let statePath = ((dir as NSString).appendingPathComponent("Library/Saved Application State") as NSString)
+                .appendingPathComponent("\(bundleID).savedState")
+            if FileManager.default.fileExists(atPath: statePath) {
+                let canonical = ContainerDiscoveryMerger.canonicalPath(dir)
+                if isApplicationContainerPath(canonical) { return canonical }
+            }
+
+            // 4. Fallback: scan preferences directory for any case-insensitive match
+            let prefsDir = (dir as NSString).appendingPathComponent("Library/Preferences")
+            if let prefFiles = try? FileManager.default.contentsOfDirectory(atPath: prefsDir) {
+                for file in prefFiles where file.hasSuffix(".plist") {
+                    let base = String(file.dropLast(".plist".count)).lowercased()
+                    if base == cleanTarget {
+                        let canonical = ContainerDiscoveryMerger.canonicalPath(dir)
+                        if isApplicationContainerPath(canonical) { return canonical }
+                    }
+                }
+            }
         }
         return nil
     }

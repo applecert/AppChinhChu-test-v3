@@ -87,6 +87,19 @@ struct AppDataBrowserView: View {
                     )
                 }
             }
+            .alert(
+                "Thông báo",
+                isPresented: Binding(
+                    get: { errorMessage != nil },
+                    set: { if !$0 { errorMessage = nil } }
+                )
+            ) {
+                Button("OK") { errorMessage = nil }
+            } message: {
+                if let msg = errorMessage {
+                    Text(msg)
+                }
+            }
         }
     }
 
@@ -248,7 +261,7 @@ struct AppDataBrowserView: View {
     }
 
     private var searchEmptyView: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 14) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: AppTheme.emptyIconSize, weight: .light))
                 .foregroundStyle(.secondary)
@@ -258,9 +271,50 @@ struct AppDataBrowserView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !query.isEmpty {
+                Button {
+                    openDirectBundleOrUUID(query)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.right.circle.fill")
+                        Text(isResolving ? language.text("browser.loading") : "Duyệt trực tiếp: \(query)")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isResolving)
+                .padding(.top, 6)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+    }
+
+    private func openDirectBundleOrUUID(_ rawInput: String) {
+        let clean = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        isResolving = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let path = ContainerStore.resolveAppContainerPath(bundleID: clean)
+            DispatchQueue.main.async {
+                isResolving = false
+                if let path, !path.isEmpty {
+                    let dest = FileBrowserDestination(
+                        containerPath: path,
+                        startPath: path,
+                        title: clean,
+                        bundleID: clean
+                    )
+                    var currentPath = activeNavigationPath.wrappedValue
+                    currentPath.append(dest)
+                    activeNavigationPath.wrappedValue = currentPath
+                } else {
+                    errorMessage = "Không tìm thấy container dữ liệu cho '\(clean)' trên hệ thống tệp."
+                }
+            }
+        }
     }
 
     private func reload() {
