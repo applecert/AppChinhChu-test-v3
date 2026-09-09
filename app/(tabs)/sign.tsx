@@ -23,6 +23,8 @@ const IpaSigner = (() => {
 import { FileArchive, Share, Trash2, FolderOpen, Layers, Wrench, X, FileKey, CheckCircle2, Rocket, PlusCircle, ShieldCheck, MoreVertical, Sliders, ChevronDown, ImagePlus, ArrowLeft, Folder } from 'lucide-react-native';
 import { COLORS, useThemeUpdate, TXT } from '../../constants/theme';
 import { TabTransition } from '../../components/ui/TabTransition';
+import { AppleSegmentedControl } from '../../components/ui/AppleSegmentedControl';
+import { AppleButton } from '../../components/ui/AppleButton';
 import { startStaticServer } from '../../utils/staticServer';
 import * as Linking from 'expo-linking';
 import * as Haptics from 'expo-haptics';
@@ -773,96 +775,65 @@ export default function SignScreen() {
     }
   };
 
+  const isLight = COLORS.background === '#F4F4F6';
+
   const renderItem = ({ item }: { item: LocalFile }) => (
-    <View style={[styles.fileCard, { backgroundColor: COLORS.surfaceCard, borderColor: COLORS.border }]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <View style={[styles.iconBox, { backgroundColor: COLORS.surfaceAccent }]}><FileArchive color={COLORS.primary} size={28} /></View>
+    <View style={[styles.fileCard, { backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderColor: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+        <View style={[styles.iconBox, { backgroundColor: isLight ? 'rgba(0,122,255,0.1)' : 'rgba(10,132,255,0.18)' }]}>
+          <FileArchive color={isLight ? '#007AFF' : '#0A84FF'} size={24} />
+        </View>
         <View style={styles.fileInfo}>
-          <Text style={[styles.fileName, { color: COLORS.text }]} numberOfLines={2}>{item.name}</Text>
-          <Text style={[styles.fileSize, { color: COLORS.textMuted }]}>{item.size} • {TXT.langName === 'English' ? 'Saved' : 'Đã lưu'}</Text>
+          <Text style={[styles.fileName, { color: isLight ? '#000000' : '#FFFFFF' }]} numberOfLines={2}>{item.name}</Text>
+          <Text style={[styles.fileSize, { color: isLight ? '#8E8E93' : 'rgba(235,235,245,0.6)' }]}>{item.size} • {TXT.langName === 'English' ? 'Saved' : 'Đã lưu'}</Text>
         </View>
       </View>
-      <View style={[styles.actionGroup, { borderColor: COLORS.border }]}>
+      <View style={[styles.actionGroup, { borderColor: 'transparent', gap: 6 }]}>
         {activeTab === 'ipa' && (
-          <TouchableOpacity style={[styles.iconBtn, {backgroundColor: 'rgba(50, 215, 75, 0.15)', borderColor: 'rgba(50, 215, 75, 0.3)', borderWidth: 1}]} onPress={() => handleSelectIpa(item)}>
-            <Wrench color="#32D74B" size={20} />
-          </TouchableOpacity>
+          <AppleButton
+            title={TXT.langName === 'English' ? 'Sign' : 'Ký'}
+            variant="filled"
+            size="small"
+            icon="wrench.fill"
+            onPress={() => handleSelectIpa(item)}
+            isLight={isLight}
+          />
         )}
-        <TouchableOpacity style={[styles.iconBtn, { backgroundColor: COLORS.surface }]} onPress={() => handleShare(item.uri)}><Share color={COLORS.text} size={20} /></TouchableOpacity>
-        <TouchableOpacity style={[styles.iconBtn, {backgroundColor: 'rgba(255, 69, 58, 0.15)'}]} onPress={() => handleDelete(item.uri, item.name)}><Trash2 color="#FF453A" size={20} /></TouchableOpacity>
+        <TouchableOpacity style={[styles.iconBtn, { backgroundColor: isLight ? 'rgba(118,118,128,0.12)' : 'rgba(118,118,128,0.24)' }]} onPress={() => handleShare(item.uri)}>
+          <Share color={isLight ? '#000000' : '#FFFFFF'} size={18} />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.iconBtn, { backgroundColor: isLight ? 'rgba(255,59,48,0.12)' : 'rgba(255,69,58,0.18)' }]} onPress={() => handleDelete(item.uri, item.name)}>
+          <Trash2 color={isLight ? '#FF3B30' : '#FF453A'} size={18} />
+        </TouchableOpacity>
       </View>
     </View>
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: COLORS.background }]}>
-      <StatusBar style={COLORS.background === '#F4F4F6' ? 'dark' : 'light'} />
-      <View style={[styles.header, { borderColor: COLORS.border }]}>
-        <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20}}>
+    <View style={[styles.container, { backgroundColor: isLight ? '#F2F2F7' : '#000000' }]}>
+      <StatusBar style={isLight ? 'dark' : 'light'} />
+      <View style={[styles.header, { borderColor: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)' }]}>
+        <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14}}>
           <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
             <TouchableOpacity style={{ padding: 4 }} onPress={() => router.replace('/')}>
               <ArrowLeft color={COLORS.text} size={24} />
             </TouchableOpacity>
-            <Text style={[styles.largeTitle, { color: COLORS.text }]}>{TXT.signAppTitle} <Wrench color={COLORS.primary} size={26} strokeWidth={2.5} /></Text>
+            <Text style={[styles.largeTitle, { color: COLORS.text }]}>{TXT.signAppTitle}</Text>
           </View>
           <TouchableOpacity style={{padding: 5}} onPress={() => setMenuVisible(true)}>
-            <MoreVertical color={COLORS.text} size={28} />
+            <MoreVertical color={COLORS.text} size={24} />
           </TouchableOpacity>
         </View>
 
-        {(() => {
-          const isLight = COLORS.background === '#F4F4F6';
-          return (
-            <View style={[
-              styles.tabContainer, 
-              { 
-                backgroundColor: isLight ? '#E5E5EA' : COLORS.surfaceSolid, 
-                borderColor: COLORS.border 
-              }
-            ]}>
-              <TouchableOpacity 
-                style={[
-                  styles.tab, 
-                  activeTab === 'ipa' && [
-                    styles.tabActive, 
-                    { backgroundColor: isLight ? '#FFFFFF' : COLORS.surface }
-                  ]
-                ]} 
-                onPress={() => setActiveTab('ipa')}
-              >
-                <Text style={[
-                  styles.tabText, 
-                  activeTab === 'ipa' && [
-                    styles.tabTextActive, 
-                    { color: isLight ? COLORS.primary : '#FFFFFF' }
-                  ]
-                ]}>
-                  {TXT.originalIpaShort}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[
-                  styles.tab, 
-                  activeTab === 'installed' && [
-                    styles.tabActive, 
-                    { backgroundColor: isLight ? '#FFFFFF' : COLORS.surface }
-                  ]
-                ]} 
-                onPress={() => setActiveTab('installed')}
-              >
-                <Text style={[
-                  styles.tabText, 
-                  activeTab === 'installed' && [
-                    styles.tabTextActive, 
-                    { color: isLight ? COLORS.primary : '#FFFFFF' }
-                  ]
-                ]}>
-                  {TXT.signedIpaShort}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })()}
+        <AppleSegmentedControl<'ipa' | 'installed'>
+          options={[
+            { id: 'ipa', label: TXT.originalIpaShort || 'File IPA Gốc', icon: 'doc.fill' },
+            { id: 'installed', label: TXT.signedIpaShort || 'App Đã Ký', icon: 'checkmark' },
+          ]}
+          selectedValue={activeTab}
+          onChange={setActiveTab}
+          isLight={isLight}
+        />
       </View>
 
       {loading ? ( <ActivityIndicator size="large" color={COLORS.primary} style={{marginTop: 50}} /> ) : localFiles.length === 0 ? (

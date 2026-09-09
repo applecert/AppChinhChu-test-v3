@@ -321,8 +321,8 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1600;
-				LastUpgradeCheck = 1600;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
 			};
 			buildConfigurationList = 3105AA00;
 			compatibilityVersion = "Xcode 14.0";

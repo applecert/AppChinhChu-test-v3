@@ -23,6 +23,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import JSZip from 'jszip';
+import { AppleSegmentedControl } from '../../components/ui/AppleSegmentedControl';
+import { AppleSearchBar } from '../../components/ui/AppleSearchBar';
 import {
   Folder,
   FolderTree,
@@ -673,60 +675,22 @@ export default function AppManagerTabScreen() {
           </View>
 
           {/* 4-SECTION SEGMENTED BAR */}
-          <View style={[styles.segmentedContainer, { backgroundColor: isLight ? '#E2E8F0' : 'rgba(255,255,255,0.06)' }]}>
-            <TouchableOpacity
-              style={[styles.segmentBtn, activeSection === 'browser' && styles.segmentBtnActive]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setActiveSection('browser');
-              }}
-            >
-              <FolderTree size={14} color={activeSection === 'browser' ? '#000' : isLight ? '#64748B' : '#94A3B8'} />
-              <Text style={[styles.segmentText, activeSection === 'browser' && styles.segmentTextActive]}>
-                Duyệt App
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.segmentBtn, activeSection === 'patches' && styles.segmentBtnActive]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setActiveSection('patches');
-              }}
-            >
-              <Gamepad2 size={14} color={activeSection === 'patches' ? '#000' : isLight ? '#64748B' : '#94A3B8'} />
-              <Text style={[styles.segmentText, activeSection === 'patches' && styles.segmentTextActive]}>
-                Mod & Patch
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.segmentBtn, activeSection === 'cleaner' && styles.segmentBtnActive]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setActiveSection('cleaner');
-                if (Object.keys(storageBreakdowns).length === 0) scanAllStorage();
-              }}
-            >
-              <Zap size={14} color={activeSection === 'cleaner' ? '#000' : isLight ? '#64748B' : '#94A3B8'} />
-              <Text style={[styles.segmentText, activeSection === 'cleaner' && styles.segmentTextActive]}>
-                Dọn Rác
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.segmentBtn, activeSection === 'system' && styles.segmentBtnActive]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setActiveSection('system');
-              }}
-            >
-              <Cpu size={14} color={activeSection === 'system' ? '#000' : isLight ? '#64748B' : '#94A3B8'} />
-              <Text style={[styles.segmentText, activeSection === 'system' && styles.segmentTextActive]}>
-                Hệ Thống
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <AppleSegmentedControl<ActiveTabSection>
+            options={[
+              { id: 'browser', label: 'Duyệt App', icon: 'folder.fill' },
+              { id: 'patches', label: 'Mod & Patch', icon: 'wrench.fill' },
+              { id: 'cleaner', label: 'Dọn Rác', icon: 'trash.fill' },
+              { id: 'system', label: 'Hệ Thống', icon: 'gearshape.fill' },
+            ]}
+            selectedValue={activeSection}
+            onChange={(val) => {
+              setActiveSection(val);
+              if (val === 'cleaner' && Object.keys(storageBreakdowns).length === 0) {
+                scanAllStorage();
+              }
+            }}
+            isLight={isLight}
+          />
         </LinearGradient>
 
         {/* SECTION 1: APP BROWSER */}
@@ -734,24 +698,12 @@ export default function AppManagerTabScreen() {
           <View style={{ flex: 1 }}>
             {/* Search & Direct Jump Bar */}
             <View style={styles.searchSection}>
-              <View
-                style={[
-                  styles.searchBox,
-                  {
-                    backgroundColor: isLight ? '#FFFFFF' : 'rgba(255,255,255,0.05)',
-                    borderColor: isLight ? '#E2E8F0' : 'rgba(255,255,255,0.08)',
-                  },
-                ]}
-              >
-                <Search size={16} color={isLight ? '#64748B' : 'rgba(240,242,248,0.4)'} />
-                <TextInput
-                  style={[styles.searchInput, { color: isLight ? '#0F172A' : '#F0F2F8' }]}
-                  placeholder="Tìm kiếm ứng dụng, tên file, Bundle ID..."
-                  placeholderTextColor={isLight ? '#94A3B8' : 'rgba(240,242,248,0.35)'}
-                  value={searchText}
-                  onChangeText={setSearchText}
-                />
-              </View>
+              <AppleSearchBar
+                value={searchText}
+                onChangeText={setSearchText}
+                placeholder="Tìm kiếm ứng dụng, tên file, Bundle ID..."
+                isLight={isLight}
+              />
 
               {/* Direct Path Input */}
               <View style={styles.directInputRow}>

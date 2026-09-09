@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions, Image, Animated } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Dimensions, Image, Animated, Switch } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GlassView } from '../components/ui/GlassView';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,40 +37,17 @@ interface CertItem {
   udid?: string;
 }
 
-function AnimatedSwitch({ value, onValueChange, styles }: { value: boolean; onValueChange: () => void; styles: any }) {
-  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.spring(anim, {
-      toValue: value ? 1 : 0,
-      stiffness: 260,
-      damping: 20,
-      mass: 0.8,
-      useNativeDriver: false,
-    }).start();
-  }, [value]);
-
-  const translateX = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [2, 20],
-  });
-
-  const scaleX = anim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [1, 1.25, 1],
-  });
-
-  const backgroundColor = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['#3A3A3C', COLORS.success],
-  });
-
+function AppleNativeSwitch({ value, onValueChange }: { value: boolean; onValueChange: () => void }) {
   return (
-    <TouchableOpacity activeOpacity={1} onPress={onValueChange}>
-      <Animated.View style={[styles.switchWrapper, { backgroundColor }]}>
-        <Animated.View style={[styles.switchDot, { transform: [{ translateX }, { scaleX }] }]} />
-      </Animated.View>
-    </TouchableOpacity>
+    <Switch
+      value={value}
+      onValueChange={() => {
+        Haptics.selectionAsync().catch(() => {});
+        onValueChange();
+      }}
+      trackColor={{ false: '#767577', true: '#34C759' }}
+      ios_backgroundColor="#3e3e3e"
+    />
   );
 }
 
@@ -933,7 +910,7 @@ export default function SettingsScreen() {
               </Text>
             </View>
           </View>
-          <AnimatedSwitch value={isBackgroundMode} onValueChange={toggleBackgroundMode} styles={styles} />
+          <AppleNativeSwitch value={isBackgroundMode} onValueChange={toggleBackgroundMode} />
         </View>
 
       </View>
