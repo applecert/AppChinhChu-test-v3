@@ -67,8 +67,8 @@ const T = {
     highlight: 'rgba(255,255,255,0.12)',
   },
 
-  cyan: '#00E5FF',
-  cyanGlow: 'rgba(0,229,255,0.3)',
+  cyan: '#0A84FF',
+  cyanGlow: 'rgba(10,132,255,0.25)',
   violet: '#A78BFA',
   violetGlow: 'rgba(167,139,250,0.3)',
   rose: '#FB7185',
@@ -685,7 +685,7 @@ export default function AppDetailScreen() {
               >
                 <Animated.View style={[styles.actionBtn, { transform: [{ scale: downloadBtnScale }] }]}>
                   <LinearGradient
-                    colors={isVipApp ? [T.gold, '#FFA500'] : [T.cyan, T.violet]}
+                    colors={isVipApp ? ['#FF9F0A', '#FF8C42'] : (isLight ? ['#007AFF', '#0052FF'] : ['#0A84FF', '#007AFF'])}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={StyleSheet.absoluteFill}
@@ -693,11 +693,11 @@ export default function AppDetailScreen() {
 
                   <View style={styles.actionBtnInner}>
                     {downloadState !== 'CÀI ĐẶT' && downloadState !== 'LỖI, THỬ LẠI' && downloadState !== 'Hoàn tất!' ? (
-                      <ActivityIndicator size="small" color={isVipApp ? T.void : T.void} style={{ marginRight: 6 }} />
+                      <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 6 }} />
                     ) : (
-                      <Download size={15} color={T.void} strokeWidth={2.5} style={{ marginRight: 6 }} />
+                      <Download size={15} color="#FFFFFF" strokeWidth={2.5} style={{ marginRight: 6 }} />
                     )}
-                    <Text style={[styles.actionBtnText, isVipApp && { color: T.void }]}>
+                    <Text style={[styles.actionBtnText, { color: '#FFFFFF' }]}>
                       {downloadState}
                     </Text>
                   </View>
