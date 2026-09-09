@@ -14,6 +14,8 @@ import { COLORS, SIZES, SHADOWS, useThemeUpdate, TXT } from '../../constants/the
 import { SPRINGS, entranceAnim, shimmerLoop } from '../../constants/animations';
 import { Sparkles, Flame, BellRing, X, ChevronRight, Bot } from 'lucide-react-native';
 import { IconSymbol } from '../../components/ui/icon-symbol';
+import { AppleButton } from '../../components/ui/AppleButton';
+import { AppleListGroup } from '../../components/ui/AppleListGroup';
 import { TabTransition } from '../../components/ui/TabTransition';
 import * as Linking from 'expo-linking';
 import { auth, db } from '../../firebaseConfig';
@@ -47,7 +49,7 @@ const SmartVIPCard = memo(({ item, index }: { item: AppItem; index: number }) =>
   return (
     <Animated.View style={[{ transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}>
       <TouchableOpacity
-        style={styles.vipCard}
+        style={[styles.vipCard, { backgroundColor: COLORS.background === '#F4F4F6' ? '#FFFFFF' : '#1C1C1E', borderColor: COLORS.background === '#F4F4F6' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)' }]}
         onPress={() => router.push(`/details/${item.id}`)}
         onPressIn={pressIn}
         onPressOut={pressOut}
@@ -55,14 +57,9 @@ const SmartVIPCard = memo(({ item, index }: { item: AppItem; index: number }) =>
       >
         <View style={styles.vipIconWrapper}>
           <Image source={{ uri: icon }} style={styles.vipIcon} />
-          <LinearGradient
-            colors={['#00F0FF', '#8B5CF6']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.vipBadge}
-          >
+          <View style={[styles.vipBadge, { backgroundColor: '#FF8C42' }]}>
             <Text style={styles.vipBadgeText}>VIP</Text>
-          </LinearGradient>
+          </View>
         </View>
         <Text style={styles.vipName} numberOfLines={2}>{item.name}</Text>
         <Text style={styles.vipSub} numberOfLines={1}>{item.category || 'VIP App'}</Text>
@@ -79,44 +76,38 @@ const AppRowItem = memo(({ app, onPress, showDivider, index }: { app: AppItem; o
   const scaleAnim   = useRef(new Animated.Value(1)).current;
   const slideAnim   = useRef(new Animated.Value(22)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
-  const getBtnScale = useRef(new Animated.Value(1)).current;
+  const isLight = COLORS.background === '#F4F4F6';
 
   useEffect(() => {
     entranceAnim(slideAnim, opacityAnim, index * 35).start();
   }, []);
 
-  const handlePressIn  = () => Animated.spring(scaleAnim,   { toValue: 0.96, ...SPRINGS.tap }).start();
-  const handlePressOut = () => Animated.spring(scaleAnim,   { toValue: 1,    ...SPRINGS.tap }).start();
-  const getBtnIn       = () => Animated.spring(getBtnScale, { toValue: 0.88, ...SPRINGS.tap }).start();
-  const getBtnOut      = () => Animated.spring(getBtnScale, { toValue: 1,    ...SPRINGS.bounce }).start();
+  const handlePressIn  = () => Animated.spring(scaleAnim, { toValue: 0.98, ...SPRINGS.tap }).start();
+  const handlePressOut = () => Animated.spring(scaleAnim, { toValue: 1,    ...SPRINGS.tap }).start();
 
   return (
     <Animated.View style={{ transform: [{ translateY: slideAnim }, { scale: scaleAnim }], opacity: opacityAnim }}>
       <TouchableOpacity 
         style={styles.appRow} 
-        activeOpacity={1} 
+        activeOpacity={0.7} 
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
       >
-        <Image source={{ uri: app.iconUrl }} style={[styles.appIcon, { borderColor: COLORS.border }]} />
+        <Image source={{ uri: app.iconUrl }} style={[styles.appIcon, { borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)' }]} />
         <View style={styles.appInfo}>
           <Text style={[styles.appName, { color: COLORS.text }]} numberOfLines={1}>{app.name}</Text>
           <Text style={[styles.appSub, { color: COLORS.textMuted }]} numberOfLines={1}>{app.sub || app.category}</Text>
         </View>
-        <TouchableOpacity 
-          style={{ zIndex: 10 }}
+        <AppleButton
+          title={TXT.langName === 'English' ? 'GET' : 'NHẬN'}
+          variant="pill"
+          size="small"
           onPress={onPress}
-          onPressIn={getBtnIn}
-          onPressOut={getBtnOut}
-          activeOpacity={1}
-        >
-          <Animated.View style={[styles.getBtn, { borderColor: COLORS.borderActive, backgroundColor: COLORS.primaryGlow, transform: [{ scale: getBtnScale }] }]}>
-            <Text style={[styles.getBtnText, { color: COLORS.primary }]}>{TXT.langName === 'English' ? 'GET' : 'NHẬN'}</Text>
-          </Animated.View>
-        </TouchableOpacity>
+          isLight={isLight}
+        />
       </TouchableOpacity>
-      {showDivider && <View style={[styles.divider, { backgroundColor: COLORS.border }]} />}
+      {showDivider && <View style={[styles.divider, { backgroundColor: isLight ? 'rgba(60,60,67,0.12)' : 'rgba(255,255,255,0.08)' }]} />}
     </Animated.View>
   );
 });
@@ -325,7 +316,7 @@ export default function HomeScreen() {
   const today = new Date().toLocaleDateString('vi-VN', { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
-    <LinearGradient colors={COLORS.bgGradient} style={styles.container}>
+    <View style={[styles.container, { backgroundColor: isLight ? '#F2F2F7' : '#000000' }]}>
       <StatusBar style={isLight ? 'dark' : 'light'} />
 
       <Modal visible={showHomePopup && !!announcement} transparent animationType="fade">
@@ -472,51 +463,49 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* Hero CTA Button */}
-        <Animated.View style={{ transform: [{ translateY: heroSlide }, { scale: heroBtnScale }], opacity: heroOpacity }}>
-          <TouchableOpacity 
-            style={[styles.mainCreateBtn, { backgroundColor: COLORS.primary }]} 
+        <Animated.View style={{ transform: [{ translateY: heroSlide }, { scale: heroBtnScale }], opacity: heroOpacity, marginHorizontal: 20, marginBottom: 12 }}>
+          <AppleButton
+            title={TXT.langName === 'English' ? 'Sign New IPA' : 'Ký IPA mới'}
+            icon="plus.circle.fill"
+            size="large"
+            variant="filled"
             onPress={handlePressCreateSign}
-            onPressIn={() => Animated.spring(heroBtnScale, { toValue: 0.95, ...SPRINGS.tap }).start()}
-            onPressOut={() => Animated.spring(heroBtnScale, { toValue: 1, ...SPRINGS.bounce }).start()}
-            activeOpacity={1}
-          >
-            <Text style={[styles.mainCreateBtnText, { color: COLORS.textDark }]}>+ Ký IPA mới</Text>
-          </TouchableOpacity>
+            isLight={isLight}
+            style={{ borderRadius: 14 }}
+          />
         </Animated.View>
 
         {/* Sub-action pills */}
-        <Animated.View style={[styles.subBtnsRow, { transform: [{ translateY: subSlide }], opacity: subOpacity }]}>
-          <TouchableOpacity 
-            style={{ flex: 1 }}
-            onPress={() => router.push('/apps')}
-            onPressIn={() => Animated.spring(subBtn1Scale, { toValue: 0.93, ...SPRINGS.tap }).start()}
-            onPressOut={() => Animated.spring(subBtn1Scale, { toValue: 1, ...SPRINGS.bounce }).start()}
-            activeOpacity={1}
-          >
-            <Animated.View style={[styles.subBtn, { backgroundColor: COLORS.surfaceSolid, borderColor: COLORS.border, transform: [{ scale: subBtn1Scale }] }]}>
-              <IconSymbol name="square.grid.2x2" size={16} color={COLORS.textMuted} />
-              <Text style={[styles.subBtnText, { color: COLORS.text }]}>Kho Ứng Dụng</Text>
-            </Animated.View>
-          </TouchableOpacity>
+        <Animated.View style={[styles.subBtnsRow, { transform: [{ translateY: subSlide }], opacity: subOpacity, marginHorizontal: 20, marginBottom: 18, gap: 10 }]}>
+          <View style={{ flex: 1 }}>
+            <AppleButton
+              title={TXT.langName === 'English' ? 'App Store' : 'Kho Ứng Dụng'}
+              icon="square.grid.2x2.fill"
+              size="medium"
+              variant="gray"
+              onPress={() => router.push('/apps')}
+              isLight={isLight}
+              style={{ borderRadius: 12 }}
+            />
+          </View>
 
-          <TouchableOpacity 
-            style={{ flex: 1 }}
-            onPress={() => router.push('/mmo')}
-            onPressIn={() => Animated.spring(subBtn2Scale, { toValue: 0.93, ...SPRINGS.tap }).start()}
-            onPressOut={() => Animated.spring(subBtn2Scale, { toValue: 1, ...SPRINGS.bounce }).start()}
-            activeOpacity={1}
-          >
-            <Animated.View style={[styles.subBtn, { backgroundColor: COLORS.surfaceSolid, borderColor: COLORS.border, transform: [{ scale: subBtn2Scale }] }]}>
-              <IconSymbol name="cart" size={16} color={COLORS.textMuted} />
-              <Text style={[styles.subBtnText, { color: COLORS.text }]}>Chợ Việt MMO</Text>
-            </Animated.View>
-          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <AppleButton
+              title={TXT.langName === 'English' ? 'Containers' : 'Chợ Tiện Ích'}
+              icon="wrench.and.screwdriver.fill"
+              size="medium"
+              variant="gray"
+              onPress={() => router.push('/mmo')}
+              isLight={isLight}
+              style={{ borderRadius: 12 }}
+            />
+          </View>
         </Animated.View>
 
         {/* Carousel card */}
         <Animated.View style={{ transform: [{ translateY: cardSlide }, { scale: carouselScale }], opacity: cardOpacity }}>
           <TouchableOpacity 
-            style={[styles.introCarousel, { backgroundColor: COLORS.surfaceSolid, borderColor: COLORS.border }, SHADOWS.glowCard]}
+            style={[styles.introCarousel, { backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)' }]}
             onPress={() => router.push('/mmo')}
             onPressIn={() => Animated.spring(carouselScale, { toValue: 0.97, ...SPRINGS.tap }).start()}
             onPressOut={() => Animated.spring(carouselScale, { toValue: 1, ...SPRINGS.bounce }).start()}
@@ -624,7 +613,7 @@ export default function HomeScreen() {
               </View>
             </View>
             
-            <View style={[styles.appListCard, { backgroundColor: COLORS.surfaceSolid, borderColor: COLORS.border }]}>
+            <View style={[styles.appListCard, { backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)' }]}>
               {newApps.map((app, index) => (
                 <AppRowItem 
                   key={app.id} 
@@ -638,7 +627,7 @@ export default function HomeScreen() {
           </>
         )}
         </Animated.ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 

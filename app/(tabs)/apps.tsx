@@ -22,6 +22,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { fetchRegularApps, AppItem } from '../../constants/data';
 import { COLORS, useThemeUpdate, loadFpsMode, saveFpsMode, FpsMode } from '../../constants/theme';
+import { AppleButton } from '../../components/ui/AppleButton';
 import {
   Search,
   X,
@@ -49,24 +50,24 @@ const GAP = 14;
 const COL2_W = (SCREEN_W - PAD * 2 - GAP) / 2;
 
 /* ═══════════════════════════════════════════════════════════════
-   IPAVIET OS 2026 DESIGN SYSTEM — Performance & Light/Dark Theme
+   IPAVIET OS 2026 DESIGN SYSTEM — Performance & Apple HIG Theme
    ═══════════════════════════════════════════════════════════════ */
 const T = {
-  void: '#03040A',
-  depth1: '#080A14',
-  depth2: '#0D0F1A',
-  depth3: '#121420',
-  cardBg: '#0F1220',
-  cyan: '#00F0FF',
-  violet: '#8B5CF6',
-  rose: '#F43F5E',
-  amber: '#F59E0B',
-  emerald: '#10B981',
-  blue: '#3B82F6',
+  void: '#000000',
+  depth1: '#1C1C1E',
+  depth2: '#2C2C2E',
+  depth3: '#3A3A3C',
+  cardBg: '#1C1C1E',
+  cyan: '#0A84FF',
+  violet: '#5E5CE6',
+  rose: '#FF3B30',
+  amber: '#FF9F0A',
+  emerald: '#30D158',
+  blue: '#0A84FF',
   text: '#FFFFFF',
-  textSecondary: 'rgba(255,255,255,0.65)',
-  textTertiary: 'rgba(255,255,255,0.35)',
-  radius: { sm: 10, md: 16, lg: 22, xl: 30, full: 999 },
+  textSecondary: 'rgba(235,235,245,0.6)',
+  textTertiary: 'rgba(235,235,245,0.3)',
+  radius: { sm: 8, md: 12, lg: 16, xl: 22, full: 999 },
 };
 
 const CATEGORIES = [
@@ -171,24 +172,16 @@ const AppCard = memo(({ item, index, isLight, styles, onPress, onGetPress }: App
             </View>
           </View>
 
-          <TouchableOpacity
-            style={styles.getBtn}
-            onPress={(e) => {
-              e.stopPropagation();
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-              onGetPress(item);
-            }}
-            activeOpacity={0.85}
-          >
-            <LinearGradient
-              colors={isLight ? ['#0052FF', '#4F46E5'] : [T.cyan, T.violet]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
+          <View style={{ marginTop: 8 }}>
+            <AppleButton
+              title="NHẬN"
+              variant="pill"
+              size="small"
+              onPress={() => onGetPress(item)}
+              isLight={isLight}
+              style={{ width: '100%' }}
             />
-            <Download size={13} color="#FFF" strokeWidth={2.5} />
-            <Text style={styles.getBtnText}>NHẬN</Text>
-          </TouchableOpacity>
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -234,27 +227,33 @@ const SkeletonCard = memo(({ styles }: { styles: any }) => {
    ═══════════════════════════════════════════════════════════════ */
 const CategoryPill = memo(({ item, active, isLight, styles, onPress }: any) => {
   const Icon = item.icon;
-  const itemColor = isLight && item.id === 'all' ? '#0052FF' : item.color;
 
   const handlePress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     onPress();
   }, [onPress]);
 
+  const activeBg = isLight ? '#000000' : '#FFFFFF';
+  const activeFg = isLight ? '#FFFFFF' : '#000000';
+  const inactiveBg = isLight ? 'rgba(118, 118, 128, 0.12)' : 'rgba(118, 118, 128, 0.24)';
+  const inactiveFg = isLight ? '#3C3C43' : 'rgba(235, 235, 245, 0.8)';
+
   return (
-    <TouchableOpacity activeOpacity={0.8} onPress={handlePress}>
+    <TouchableOpacity activeOpacity={0.7} onPress={handlePress}>
       <View
         style={[
           styles.catPill,
-          active && {
-            backgroundColor: isLight ? 'rgba(0,82,255,0.08)' : 'rgba(255,255,255,0.12)',
-            borderColor: itemColor + '70',
+          {
+            backgroundColor: active ? activeBg : inactiveBg,
+            borderColor: 'transparent',
+            borderRadius: 18,
+            paddingVertical: 7,
+            paddingHorizontal: 14,
           },
         ]}
       >
-        <Icon size={14} color={active ? itemColor : styles.catText.color} strokeWidth={active ? 2.5 : 1.5} />
-        <Text style={[styles.catText, active && { color: itemColor }]}>{item.label}</Text>
-        {active && <View style={[styles.activeDot, { backgroundColor: itemColor }]} />}
+        <Icon size={13} color={active ? activeFg : inactiveFg} strokeWidth={active ? 2.5 : 1.8} />
+        <Text style={[styles.catText, { color: active ? activeFg : inactiveFg, fontWeight: active ? '700' : '500' }]}>{item.label}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -272,30 +271,24 @@ const HeroBanner = memo(({ item, isLight, styles, onPress }: { item: AppItem | n
       onPress={() => onPress(item.id)}
       style={{ marginBottom: GAP * 1.5, marginHorizontal: PAD, marginTop: 8 }}
     >
-      <View style={styles.heroContainer}>
-        <LinearGradient
-          colors={isLight ? ['rgba(0,82,255,0.12)', 'rgba(79,70,229,0.06)', 'transparent'] : ['rgba(0,240,255,0.18)', 'rgba(139,92,246,0.12)', 'transparent']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={{ padding: 20, flexDirection: 'row', alignItems: 'center' }}>
+      <View style={[styles.heroContainer, { backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)' }]}>
+        <View style={{ padding: 18, flexDirection: 'row', alignItems: 'center' }}>
           <View style={styles.heroIconWrap}>
             <Image source={{ uri: item.iconUrl }} style={styles.heroIcon} resizeMode="cover" />
           </View>
 
           <View style={{ flex: 1, marginLeft: 16 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <Flame size={14} color={T.rose} />
-              <Text style={styles.heroTag}>ĐANG HOT</Text>
+              <Flame size={14} color="#FF9F0A" />
+              <Text style={[styles.heroTag, { color: '#FF9F0A' }]}>NỔI BẬT</Text>
             </View>
             <Text style={styles.heroTitle} numberOfLines={1}>{item.name}</Text>
             <Text style={styles.heroSub} numberOfLines={2}>{item.category || 'Ứng dụng nổi bật'}</Text>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 10 }}>
-              <View style={styles.heroBtn}>
-                <Text style={styles.heroBtnText}>Khám phá</Text>
-                <ChevronRight size={14} color={isLight ? '#FFFFFF' : T.void} strokeWidth={3} />
+              <View style={[styles.heroBtn, { backgroundColor: isLight ? '#000000' : '#FFFFFF' }]}>
+                <Text style={[styles.heroBtnText, { color: isLight ? '#FFFFFF' : '#000000' }]}>Khám phá</Text>
+                <ChevronRight size={14} color={isLight ? '#FFFFFF' : '#000000'} strokeWidth={3} />
               </View>
               {item.rating && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -315,22 +308,22 @@ const HeroBanner = memo(({ item, isLight, styles, onPress }: { item: AppItem | n
    SEARCH FIELD
    ═══════════════════════════════════════════════════════════════ */
 const SearchField = memo(({ value, isLight, styles, onChangeText, onClear }: any) => (
-  <View style={{ paddingHorizontal: PAD, marginTop: 16, marginBottom: 14 }}>
-    <View style={styles.searchBar}>
-      <Search size={18} color={isLight ? '#0052FF' : T.cyan} strokeWidth={2} />
+  <View style={{ paddingHorizontal: PAD, marginTop: 12, marginBottom: 12 }}>
+    <View style={[styles.searchBar, { backgroundColor: isLight ? 'rgba(118, 118, 128, 0.12)' : 'rgba(118, 118, 128, 0.24)', borderRadius: 10, borderWidth: 0, height: 38 }]}>
+      <Search size={15} color={isLight ? '#8E8E93' : 'rgba(235, 235, 245, 0.6)'} strokeWidth={2} />
       <TextInput
-        style={styles.searchInput}
-        placeholder="Tìm kiếm ứng dụng, game, tweak..."
-        placeholderTextColor={styles.catText.color}
+        style={[styles.searchInput, { fontSize: 14 }]}
+        placeholder="Tìm kiếm ứng dụng, game..."
+        placeholderTextColor={isLight ? '#8E8E93' : 'rgba(235, 235, 245, 0.5)'}
         value={value}
         onChangeText={onChangeText}
         autoCapitalize="none"
-        selectionColor={isLight ? '#0052FF' : T.cyan}
+        selectionColor={isLight ? '#007AFF' : '#0A84FF'}
       />
       {value !== '' && (
         <TouchableOpacity onPress={onClear} style={{ padding: 4 }}>
           <View style={styles.clearCircle}>
-            <X size={12} color={styles.catText.color} strokeWidth={2.5} />
+            <X size={12} color={isLight ? '#8E8E93' : '#FFFFFF'} strokeWidth={2.5} />
           </View>
         </TouchableOpacity>
       )}

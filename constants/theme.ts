@@ -6,11 +6,11 @@ export const THEME_STYLES = {
   obsidian: {
     background: '#000000', // Đen OLED tuyệt đối
     bgGradient: ['#000000', '#000000', '#000000'] as const,
-    surface: 'rgba(15, 15, 18, 0.65)',
-    surfaceSolid: '#0B0B0D',
-    surfaceCard: 'rgba(12, 12, 14, 0.85)',
-    surfaceAccent: 'rgba(255, 255, 255, 0.03)',
-    primary: '#0A84FF', // Xanh Neon Apple
+    surface: 'rgba(28, 28, 30, 0.85)',
+    surfaceSolid: '#1C1C1E',
+    surfaceCard: '#1C1C1E',
+    surfaceAccent: 'rgba(255, 255, 255, 0.05)',
+    primary: '#0A84FF', // Apple System Blue
     primaryLight: '#30B0FF',
     primaryNeon: '#20A0FF',
     primaryGlow: 'rgba(10, 132, 255, 0.25)',

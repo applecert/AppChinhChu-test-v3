@@ -25,6 +25,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import JSZip from 'jszip';
 import { AppleSegmentedControl } from '../../components/ui/AppleSegmentedControl';
 import { AppleSearchBar } from '../../components/ui/AppleSearchBar';
+import { AppleButton } from '../../components/ui/AppleButton';
+import { AppleRowIcon } from '../../components/ui/AppleRowIcon';
 import {
   Folder,
   FolderTree,
@@ -538,8 +540,8 @@ export default function AppManagerTabScreen() {
         style={[
           styles.appCard,
           {
-            backgroundColor: isLight ? '#FFFFFF' : '#0B1120',
-            borderColor: isLight ? '#E2E8F0' : 'rgba(255, 255, 255, 0.08)',
+            backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+            borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255, 255, 255, 0.08)',
           },
         ]}
       >
@@ -552,19 +554,17 @@ export default function AppManagerTabScreen() {
             {item.icon ? (
               <Image source={{ uri: item.icon }} style={styles.appIcon} />
             ) : (
-              <View style={[styles.appIconFallback, { backgroundColor: isLight ? '#EEF2F6' : '#1A2234' }]}>
-                <Folder size={26} color={isLight ? '#0052FF' : '#00F0FF'} />
-              </View>
+              <AppleRowIcon name="folder.fill" color="#0A84FF" frameSize={44} size={22} cornerRadius={12} />
             )}
           </View>
 
           <View style={styles.appInfo}>
             <View style={styles.nameRow}>
-              <Text style={[styles.appName, { color: isLight ? '#0F172A' : '#F0F2F8' }]} numberOfLines={1}>
+              <Text style={[styles.appName, { color: isLight ? '#000000' : '#FFFFFF' }]} numberOfLines={1}>
                 {item.name}
               </Text>
               {item.version ? (
-                <View style={[styles.versionPill, { backgroundColor: isLight ? '#EEF2F6' : 'rgba(255,255,255,0.06)' }]}>
+                <View style={[styles.versionPill, { backgroundColor: isLight ? 'rgba(118,118,128,0.12)' : 'rgba(255,255,255,0.08)' }]}>
                   <Text style={[styles.appVersion, { color: isLight ? '#64748B' : '#94A3B8' }]}>
                     v{item.version}
                   </Text>
@@ -572,70 +572,70 @@ export default function AppManagerTabScreen() {
               ) : null}
             </View>
 
-            <Text style={[styles.appBundle, { color: isLight ? '#0052FF' : '#00F0FF' }]} numberOfLines={1}>
+            <Text style={[styles.appBundle, { color: isLight ? '#007AFF' : '#0A84FF' }]} numberOfLines={1}>
               {item.bundleId}
             </Text>
 
             <View style={styles.statusRow}>
-              <View style={styles.miniDot} />
-              <Text style={[styles.statusLabel, { color: isLight ? '#10B981' : '#34D399' }]}>
+              <View style={[styles.miniDot, { backgroundColor: '#34C759' }]} />
+              <Text style={[styles.statusLabel, { color: '#34C759' }]}>
                 {breakdown ? `Dung lượng: ${formatBytes(breakdown.total)}` : (item.containerPath ? 'Container Active' : 'Bundle Application')}
               </Text>
             </View>
           </View>
 
           <TouchableOpacity
-            style={[styles.launchBtn, { backgroundColor: isLight ? '#F1F5F9' : 'rgba(255,255,255,0.06)' }]}
+            style={[styles.launchBtn, { backgroundColor: isLight ? 'rgba(118,118,128,0.12)' : 'rgba(255,255,255,0.08)' }]}
             onPress={() => handleLaunchApp(item)}
           >
-            <Play size={15} color={isLight ? '#0052FF' : '#00F0FF'} fill={isLight ? '#0052FF' : '#00F0FF'} />
+            <Play size={14} color={isLight ? '#007AFF' : '#0A84FF'} fill={isLight ? '#007AFF' : '#0A84FF'} />
           </TouchableOpacity>
         </TouchableOpacity>
 
         {/* Action Row */}
-        <View style={[styles.cardActionRow, { borderTopColor: isLight ? '#F1F5F9' : 'rgba(255,255,255,0.05)' }]}>
+        <View style={[styles.cardActionRow, { borderTopColor: isLight ? 'rgba(60,60,67,0.08)' : 'rgba(255,255,255,0.06)' }]}>
           <TouchableOpacity
-            style={[styles.miniActionBtn, { backgroundColor: isLight ? 'rgba(0,82,255,0.06)' : 'rgba(0,240,255,0.08)' }]}
+            style={[styles.miniActionBtn, { backgroundColor: isLight ? 'rgba(0,122,255,0.08)' : 'rgba(10,132,255,0.12)' }]}
             onPress={() => handleOpenBrowser(item)}
           >
-            <FolderTree size={14} color={isLight ? '#0052FF' : '#00F0FF'} />
-            <Text style={[styles.miniActionText, { color: isLight ? '#0052FF' : '#00F0FF' }]}>Duyệt File</Text>
+            <FolderTree size={14} color={isLight ? '#007AFF' : '#0A84FF'} />
+            <Text style={[styles.miniActionText, { color: isLight ? '#007AFF' : '#0A84FF' }]}>Duyệt File</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.miniActionBtn, { backgroundColor: isLight ? 'rgba(245,158,11,0.06)' : 'rgba(245,158,11,0.1)' }]}
+            style={[styles.miniActionBtn, { backgroundColor: isLight ? 'rgba(255,159,10,0.08)' : 'rgba(255,159,10,0.12)' }]}
             onPress={() => handleInjectModFile(item)}
           >
-            <Sparkles size={14} color="#F59E0B" />
-            <Text style={[styles.miniActionText, { color: '#F59E0B' }]}>Tiêm Mod</Text>
+            <Sparkles size={14} color="#FF9F0A" />
+            <Text style={[styles.miniActionText, { color: '#FF9F0A' }]}>Tiêm Mod</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.miniActionBtn, { backgroundColor: isLight ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.1)' }]}
+            style={[styles.miniActionBtn, { backgroundColor: isLight ? 'rgba(52,199,89,0.08)' : 'rgba(52,199,89,0.12)' }]}
             onPress={() => handleBackupContainer(item)}
             disabled={isBackingUp}
           >
             {isBackingUp ? (
-              <ActivityIndicator size="small" color="#10B981" />
+              <ActivityIndicator size="small" color="#34C759" />
             ) : (
               <>
-                <FileArchive size={14} color="#10B981" />
-                <Text style={[styles.miniActionText, { color: '#10B981' }]}>Backup</Text>
+                <FileArchive size={14} color="#34C759" />
+                <Text style={[styles.miniActionText, { color: '#34C759' }]}>Backup</Text>
               </>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.miniActionBtn, { backgroundColor: isLight ? 'rgba(244,63,94,0.06)' : 'rgba(244,63,94,0.1)' }]}
+            style={[styles.miniActionBtn, { backgroundColor: isLight ? 'rgba(255,59,48,0.08)' : 'rgba(255,69,58,0.12)' }]}
             onPress={() => handleCleanCache(item)}
             disabled={isCleaning}
           >
             {isCleaning ? (
-              <ActivityIndicator size="small" color="#F43F5E" />
+              <ActivityIndicator size="small" color="#FF3B30" />
             ) : (
               <>
-                <Trash2 size={14} color="#F43F5E" />
-                <Text style={[styles.miniActionText, { color: '#F43F5E' }]}>Dọn Rác</Text>
+                <Trash2 size={14} color={isLight ? '#FF3B30' : '#FF453A'} />
+                <Text style={[styles.miniActionText, { color: isLight ? '#FF3B30' : '#FF453A' }]}>Dọn Rác</Text>
               </>
             )}
           </TouchableOpacity>
@@ -646,20 +646,19 @@ export default function AppManagerTabScreen() {
 
   return (
     <TabTransition tabPath="/mmo">
-      <View style={[styles.container, { backgroundColor: isLight ? '#F8FAFC' : '#030712' }]}>
+      <View style={[styles.container, { backgroundColor: isLight ? '#F2F2F7' : '#000000' }]}>
         {/* Top Header */}
-        <LinearGradient
-          colors={isLight ? ['#FFFFFF', '#F1F5F9'] : ['#0B1120', '#030712']}
-          style={styles.header}
+        <View
+          style={[styles.header, { backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: isLight ? 'rgba(60,60,67,0.12)' : 'rgba(255,255,255,0.08)' }]}
         >
           <View style={styles.headerTop}>
             <View style={styles.headerTitleWrap}>
-              <Text style={[styles.headerTitle, { color: isLight ? '#0F172A' : '#F0F2F8' }]}>
+              <Text style={[styles.headerTitle, { color: isLight ? '#000000' : '#FFFFFF' }]}>
                 3105 System Hub
               </Text>
               <View style={styles.badgeRow}>
-                <View style={styles.activeDot} />
-                <Text style={[styles.headerSubtitle, { color: isLight ? '#0052FF' : '#00F0FF' }]}>
+                <View style={[styles.activeDot, { backgroundColor: '#34C759' }]} />
+                <Text style={[styles.headerSubtitle, { color: '#34C759' }]}>
                   Bypass Sandbox Active • Multi-Container Ready
                 </Text>
               </View>
@@ -691,7 +690,7 @@ export default function AppManagerTabScreen() {
             }}
             isLight={isLight}
           />
-        </LinearGradient>
+        </View>
 
         {/* SECTION 1: APP BROWSER */}
         {activeSection === 'browser' && (
@@ -897,47 +896,42 @@ export default function AppManagerTabScreen() {
         {activeSection === 'cleaner' && (
           <ScrollView contentContainerStyle={styles.sectionScroll}>
             {/* Storage Hero */}
-            <LinearGradient
-              colors={['rgba(0, 240, 255, 0.12)', 'rgba(0, 82, 255, 0.04)']}
-              style={styles.cleanerHero}
+            <View
+              style={[styles.cleanerHero, { backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E', borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)' }]}
             >
               <View style={styles.cleanerHeroTop}>
-                <View>
-                  <Text style={[styles.cleanerHeroTitle, { color: isLight ? '#0F172A' : '#F0F2F8' }]}>
-                    Siêu Dọn Rác Toàn Diện
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={[styles.cleanerHeroTitle, { color: isLight ? '#000000' : '#FFFFFF' }]}>
+                    Dọn Dẹp Bộ Nhớ Đệm
                   </Text>
-                  <Text style={[styles.cleanerHeroSub, { color: isLight ? '#64748B' : 'rgba(240,242,248,0.6)' }]}>
-                    Đã dọn dẹp giải phóng: {totalFreedMB > 0 ? `${totalFreedMB} MB` : '0 MB'}
+                  <Text style={[styles.cleanerHeroSub, { color: isLight ? '#8E8E93' : 'rgba(235,235,245,0.6)' }]}>
+                    Đã giải phóng: {totalFreedMB > 0 ? `${totalFreedMB} MB` : '0 MB'}
                   </Text>
                 </View>
 
-                <TouchableOpacity
-                  style={[styles.cleanAllBigBtn, { backgroundColor: isCleaningAll ? '#475569' : '#00F0FF' }]}
-                  onPress={handleCleanAllApps}
+                <AppleButton
+                  title={isCleaningAll ? "Đang dọn..." : "DỌN TOÀN BỘ"}
+                  icon={isCleaningAll ? undefined : "sparkles"}
+                  loading={isCleaningAll}
                   disabled={isCleaningAll || apps.length === 0}
-                >
-                  {isCleaningAll ? (
-                    <ActivityIndicator size="small" color="#000" />
-                  ) : (
-                    <>
-                      <Zap size={16} color="#000" />
-                      <Text style={styles.cleanAllBigText}>DỌN TOÀN BỘ</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                  variant="filled"
+                  size="small"
+                  onPress={handleCleanAllApps}
+                  isLight={isLight}
+                />
               </View>
 
-              <TouchableOpacity style={styles.scanStorageBtn} onPress={scanAllStorage} disabled={isScanningStorage}>
+              <TouchableOpacity style={[styles.scanStorageBtn, { backgroundColor: isLight ? 'rgba(118,118,128,0.08)' : 'rgba(255,255,255,0.06)' }]} onPress={scanAllStorage} disabled={isScanningStorage}>
                 {isScanningStorage ? (
-                  <ActivityIndicator size="small" color="#00F0FF" />
+                  <ActivityIndicator size="small" color="#0A84FF" />
                 ) : (
-                  <Text style={styles.scanStorageText}>⚡ Quét lại chi tiết dung lượng từng App</Text>
+                  <Text style={[styles.scanStorageText, { color: isLight ? '#007AFF' : '#0A84FF' }]}>Quét lại chi tiết dung lượng từng App</Text>
                 )}
               </TouchableOpacity>
-            </LinearGradient>
+            </View>
 
             {/* App by App Breakdown */}
-            <Text style={[styles.subSectionTitle, { color: isLight ? '#0F172A' : '#F0F2F8' }]}>
+            <Text style={[styles.subSectionTitle, { color: isLight ? '#000000' : '#FFFFFF' }]}>
               Chi tiết dung lượng theo ứng dụng ({apps.length})
             </Text>
 
@@ -951,8 +945,8 @@ export default function AppManagerTabScreen() {
                   style={[
                     styles.cleanerCard,
                     {
-                      backgroundColor: isLight ? '#FFFFFF' : '#0B1120',
-                      borderColor: isLight ? '#E2E8F0' : 'rgba(255,255,255,0.08)',
+                      backgroundColor: isLight ? '#FFFFFF' : '#1C1C1E',
+                      borderColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
                     },
                   ]}
                 >
@@ -961,9 +955,7 @@ export default function AppManagerTabScreen() {
                       {app.icon ? (
                         <Image source={{ uri: app.icon }} style={styles.appIconSmall} />
                       ) : (
-                        <View style={[styles.appIconFallbackSmall, { backgroundColor: isLight ? '#EEF2F6' : '#1A2234' }]}>
-                          <Folder size={18} color="#00F0FF" />
-                        </View>
+                        <AppleRowIcon name="folder.fill" color="#0A84FF" frameSize={36} size={18} cornerRadius={9} />
                       )}
                     </View>
 

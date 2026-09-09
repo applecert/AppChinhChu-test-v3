@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Alert, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, Image, DeviceEventEmitter, InteractionManager } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, Alert, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, Image, DeviceEventEmitter, InteractionManager, Switch } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -882,20 +882,18 @@ export default function SignScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: 20, paddingTop: 10}} style={{ width: '100%' }}>
               
-              <TouchableOpacity 
-                style={[
-                  styles.addCertBtn, 
-                  { 
-                    backgroundColor: COLORS.background === '#F4F4F6' ? 'rgba(0,122,255,0.06)' : 'rgba(255,255,255,0.03)', 
-                    borderColor: COLORS.primary 
-                  }
-                ]} 
-                onPress={importCertFromZip} 
-                disabled={isUnzipping}
-              >
-                 {isUnzipping ? <ActivityIndicator color={COLORS.primary} /> : <PlusCircle color={COLORS.primary} size={24} />}
-                 <Text style={[styles.addCertText, { color: COLORS.primary }]}>{isUnzipping ? TXT.unzippingText : TXT.importZip}</Text>
-              </TouchableOpacity>
+              <View style={{ marginBottom: 16 }}>
+                <AppleButton
+                  title={isUnzipping ? TXT.unzippingText : TXT.importZip}
+                  icon={isUnzipping ? undefined : "plus.circle.fill"}
+                  loading={isUnzipping}
+                  size="medium"
+                  variant="tinted"
+                  onPress={importCertFromZip}
+                  isLight={isLight}
+                  style={{ borderRadius: 12 }}
+                />
+              </View>
 
               {savedCerts.length === 0 && <Text style={{color: COLORS.textMuted, textAlign: 'center', marginTop: 20}}>{TXT.noCertsSavedText}</Text>}
               
@@ -1009,8 +1007,8 @@ export default function SignScreen() {
                           </View>
 
                           {/* Nhân bản ứng dụng */}
-                          <View style={[styles.rowItemNoPress, { paddingHorizontal: 0, paddingVertical: 8 }]}>
-                            <View style={{ gap: 2 }}>
+                          <View style={[styles.rowItemNoPress, { paddingHorizontal: 0, paddingVertical: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+                            <View style={{ gap: 2, flex: 1, marginRight: 12 }}>
                               <Text style={[styles.rowLabel, { color: COLORS.text, fontSize: 14 }]}>
                                 {TXT.langName === 'English' ? 'Clone Application' : 'Nhân bản ứng dụng'}
                               </Text>
@@ -1018,13 +1016,13 @@ export default function SignScreen() {
                                 {TXT.langName === 'English' ? 'Install alongside the original app' : 'Cho phép cài đặt song song với app gốc'}
                               </Text>
                             </View>
-                            <TouchableOpacity 
-                              style={[styles.switchWrapper, { backgroundColor: isCloning ? COLORS.success : '#333' }]}
-                              activeOpacity={0.8}
-                              onPress={() => handleToggleCloning(!isCloning)}
-                            >
-                              <View style={[styles.switchDot, { transform: [{ translateX: isCloning ? 20 : 2 }] }]} />
-                            </TouchableOpacity>
+                            <Switch
+                              value={isCloning}
+                              onValueChange={(val) => handleToggleCloning(val)}
+                              trackColor={{ false: isLight ? '#E5E5EA' : '#39393D', true: '#34C759' }}
+                              thumbColor="#FFFFFF"
+                              ios_backgroundColor={isLight ? '#E5E5EA' : '#39393D'}
+                            />
                           </View>
 
                           {isCloning && (
@@ -1054,14 +1052,18 @@ export default function SignScreen() {
             </ScrollView>
 
             {selectedIpa && (
-              <View style={{paddingTop: 15, borderTopWidth: 1, borderColor: COLORS.border, width: '100%'}}>
-                <TouchableOpacity style={[styles.signBtn, { backgroundColor: COLORS.primary }, (!selectedCert || isSigning) && {opacity: 0.5}]} onPress={handleStartSign} disabled={!selectedCert || isSigning}>
-                  {isSigning ? (
-                    <View style={{flexDirection: 'row', alignItems: 'center'}}><ActivityIndicator color={COLORS.textDark} style={{marginRight: 10}} /><Text style={[styles.signBtnText, { color: COLORS.textDark }]}>{signingProgress || TXT.coreSigningText}</Text></View>
-                  ) : (
-                    <View style={{flexDirection: 'row', alignItems: 'center'}}><Rocket color={COLORS.textDark} size={20} style={{marginRight: 8}} /><Text style={[styles.signBtnText, { color: COLORS.textDark }]}>{TXT.tapToSignNow}</Text></View>
-                  )}
-                </TouchableOpacity>
+              <View style={{ paddingTop: 15, borderTopWidth: StyleSheet.hairlineWidth, borderColor: isLight ? 'rgba(60,60,67,0.12)' : 'rgba(255,255,255,0.1)', width: '100%' }}>
+                <AppleButton
+                  title={isSigning ? (signingProgress || TXT.coreSigningText) : TXT.tapToSignNow}
+                  icon={isSigning ? undefined : "bolt.fill"}
+                  loading={isSigning}
+                  disabled={!selectedCert || isSigning}
+                  size="large"
+                  variant="filled"
+                  onPress={handleStartSign}
+                  isLight={isLight}
+                  style={{ width: '100%', borderRadius: 14 }}
+                />
               </View>
             )}
           </View>
